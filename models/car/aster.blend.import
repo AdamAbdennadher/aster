@@ -1,0 +1,131 @@
+[remap]
+
+importer="scene"
+importer_version=1
+type="PackedScene"
+uid="uid://bbe6ren2rw4qx"
+path="res://.godot/imported/aster.blend-a439507b4106f47083f28029f32cde4f.scn"
+
+[deps]
+
+source_file="res://models/car/aster.blend"
+dest_files=["res://.godot/imported/aster.blend-a439507b4106f47083f28029f32cde4f.scn"]
+
+[params]
+
+nodes/root_type=""
+nodes/root_name=""
+nodes/root_script=null
+mesh_library/use_node_names_as_mesh_names=false
+array_mesh/deduplicate_surfaces=true
+nodes/apply_root_scale=true
+nodes/root_scale=1.0
+nodes/import_as_skeleton_bones=false
+nodes/use_name_suffixes=true
+nodes/use_node_type_suffixes=true
+meshes/ensure_tangents=true
+meshes/generate_lods=true
+meshes/create_shadow_meshes=true
+meshes/light_baking=1
+meshes/lightmap_texel_size=0.2
+meshes/force_disable_compression=false
+skins/use_named_skins=true
+animation/import=true
+animation/fps=30
+animation/trimming=false
+animation/remove_immutable_tracks=true
+animation/import_rest_as_RESET=false
+import_script/path=""
+materials/extract=0
+materials/extract_format=0
+materials/extract_path=""
+_subresources={
+"materials": {
+"Matériau": {
+"use_external/enabled": true,
+"use_external/fallback_path": "res://models/car/materials/Matériau.tres",
+"use_external/path": "uid://cqp7vi2tohgc8"
+},
+"Matériau.002": {
+"use_external/enabled": true,
+"use_external/fallback_path": "res://models/car/materials/Matériau.002.tres",
+"use_external/path": "uid://dpmybkv8y3r8b"
+},
+"Matériau.003": {
+"use_external/enabled": true,
+"use_external/fallback_path": "res://models/car/materials/Matériau.003.tres",
+"use_external/path": "uid://cpoeaiyucsdju"
+},
+"Matériau.005": {
+"use_external/enabled": true,
+"use_external/fallback_path": "res://models/car/materials/Matériau.005.tres",
+"use_external/path": "uid://d2qviy2iive3t"
+},
+"Matériau.006": {
+"use_external/enabled": true,
+"use_external/fallback_path": "res://models/car/materials/Matériau.006.tres",
+"use_external/path": "uid://noitk6gk3qcn"
+},
+"Matériau.007": {
+"use_external/enabled": true,
+"use_external/fallback_path": "res://models/car/materials/Matériau.007.tres",
+"use_external/path": "uid://c8yk1mfjckh7y"
+},
+"Matériau.008": {
+"use_external/enabled": true,
+"use_external/fallback_path": "res://models/car/materials/Matériau.008.tres",
+"use_external/path": "uid://cbpgnqvbhu1pb"
+},
+"Matériau.009": {
+"use_external/enabled": true,
+"use_external/fallback_path": "res://models/car/materials/Matériau.009.tres",
+"use_external/path": "uid://bvmks5nnlfx8h"
+},
+"Matériau.011": {
+"use_external/enabled": true,
+"use_external/fallback_path": "res://models/car/materials/Matériau.011.tres",
+"use_external/path": "uid://d18p577dlkchi"
+},
+"Matériau.014": {
+"use_external/enabled": true,
+"use_external/fallback_path": "res://models/car/materials/Matériau.014.tres",
+"use_external/path": "uid://bib4lytlfju46"
+},
+"Matériau.016": {
+"use_external/enabled": true,
+"use_external/fallback_path": "res://models/car/materials/Matériau.016.tres",
+"use_external/path": "uid://bviyviy425bx0"
+},
+"Matériau.019": {
+"use_external/enabled": true,
+"use_external/fallback_path": "res://models/car/materials/Matériau.019.tres",
+"use_external/path": "uid://cfr4exvey671f"
+},
+"Matériau.020": {
+"use_external/enabled": true,
+"use_external/fallback_path": "res://models/car/materials/Matériau.020.tres",
+"use_external/path": "uid://dlj57t3xlbv36"
+}
+}
+}
+blender/nodes/visible=0
+blender/nodes/active_collection_only=false
+blender/nodes/punctual_lights=true
+blender/nodes/cameras=true
+blender/nodes/custom_properties=true
+blender/nodes/modifiers=1
+blender/meshes/vertex_colors=1
+blender/meshes/uvs=true
+blender/meshes/normals=true
+blender/meshes/export_geometry_nodes_instances=false
+blender/meshes/gpu_instances=false
+blender/meshes/tangents=true
+blender/meshes/skins=2
+blender/meshes/export_bones_deforming_mesh_only=false
+blender/materials/unpack_enabled=true
+blender/materials/export_materials=1
+blender/animation/limit_playback=true
+blender/animation/always_sample=true
+blender/animation/group_tracks=true
+gltf/naming_version=2
+gltf/texture_map_mode=1
