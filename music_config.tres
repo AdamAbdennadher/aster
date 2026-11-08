@@ -1,16 +1,14 @@
-[gd_resource type="Resource" script_class="MusicConfig" format=3]
+[gd_resource type="Resource" script_class="MusicConfig" format=3 uid="uid://dxrb1b0oi7ra7"]
 
-[ext_resource type="Script" path="res://music_config.gd" id="1_cfg"]
-[ext_resource type="AudioStream" path="res://sounds/musics/mainMenu.mp3" id="2_menu"]
-[ext_resource type="AudioStream" path="res://sounds/musics/falco.mp3" id="3_falco"]
-[ext_resource type="AudioStream" path="res://sounds/musics/fox.mp3" id="4_fox"]
-[ext_resource type="AudioStream" path="res://sounds/musics/kindred.mp3" id="5_kindred"]
-[ext_resource type="AudioStream" path="res://sounds/musics/nvim.mp3" id="6_nvim"]
-[ext_resource type="AudioStream" path="res://sounds/musics/pedri.mp3" id="7_pedri"]
+[ext_resource type="Script" uid="uid://bu5540lxrv0jw" path="res://music_config.gd" id="1_cfg"]
+[ext_resource type="AudioStream" uid="uid://mdvbwlvxdr4e" path="res://sounds/musics/mainMenu.mp3" id="2_menu"]
+[ext_resource type="AudioStream" uid="uid://dra2f45or5i66" path="res://sounds/musics/falco.mp3" id="3_falco"]
+[ext_resource type="AudioStream" uid="uid://bggmsymacnh40" path="res://sounds/musics/fox.mp3" id="4_fox"]
+[ext_resource type="AudioStream" uid="uid://bwgdfoy7cl0e8" path="res://sounds/musics/kindred.mp3" id="5_kindred"]
+[ext_resource type="AudioStream" uid="uid://bc6gt27lubokg" path="res://sounds/musics/nvim.mp3" id="6_nvim"]
+[ext_resource type="AudioStream" uid="uid://lwspunv4pee" path="res://sounds/musics/pedri.mp3" id="7_pedri"]
 
 [resource]
 script = ExtResource("1_cfg")
 menu_track = ExtResource("2_menu")
 playlist = Array[AudioStream]([ExtResource("3_falco"), ExtResource("4_fox"), ExtResource("5_kindred"), ExtResource("6_nvim"), ExtResource("7_pedri")])
-crossfade = 2.0
-volume_db = -6.0

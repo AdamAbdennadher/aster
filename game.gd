@@ -15,14 +15,22 @@ const MAPS := [
 ]
 
 signal state_changed(state: State)
+signal input_device_changed(gamepad: bool)
 
 var state := State.PLAYING:
 	set(value):
 		state = value
 		state_changed.emit(value)
 var current_map := ""
+var using_gamepad := false   # last input came from a controller (the HUD shows the matching buttons)
 
 var _volumes := {"Master": 0.8, "Music": 0.7, "Engine": 0.8, "SFX": 0.8}
+
+const DISPLAY_MODES := ["windowed", "fullscreen", "exclusive"]
+const RESOLUTIONS := [Vector2i(1280, 720), Vector2i(1600, 900), Vector2i(1920, 1080), Vector2i(2560, 1440), Vector2i(3840, 2160)]
+# "fullscreen" is a borderless window covering the screen; the resolution only applies in windowed mode
+const FPS_LIMITS := [30, 60, 120, 144, 165, 240, 0]   # 0 = unlimited
+var display := {"mode": "fullscreen", "resolution": Vector2i(1280, 720), "vsync": true, "max_fps": 0}
 var _fade: ColorRect
 var _pause_menu: Node
 var _busy := false
@@ -32,6 +40,7 @@ func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	_setup_audio_buses()
 	_load_settings()
+	apply_display()
 	var layer := CanvasLayer.new()
 	layer.layer = 100
 	add_child(layer)
@@ -59,9 +68,19 @@ func _detect_start_scene() -> void:
 
 
 func _unhandled_input(event: InputEvent) -> void:
-	if state == State.PLAYING and event is InputEventKey and event.pressed and not event.echo \
-			and event.physical_keycode == KEY_ESCAPE:
+	if state == State.PLAYING and event.is_action_pressed("pause"):
 		pause()
+
+
+func _input(event: InputEvent) -> void:
+	var pad := using_gamepad
+	if event is InputEventJoypadButton or (event is InputEventJoypadMotion and absf(event.axis_value) > 0.5):
+		pad = true
+	elif event is InputEventKey or event is InputEventMouseButton:
+		pad = false
+	if pad != using_gamepad:
+		using_gamepad = pad
+		input_device_changed.emit(pad)
 
 
 # ---------- Flow ----------
@@ -140,6 +159,48 @@ func _update_3d_scale() -> void:
 		get_viewport().scaling_3d_scale = clampf(PIXEL_ROWS / h, 0.1, 1.0)
 
 
+# ---------- Display ----------
+
+## Resolutions that fit on the current screen
+func available_resolutions() -> Array[Vector2i]:
+	var screen := DisplayServer.screen_get_size()
+	var list: Array[Vector2i] = []
+	for r in RESOLUTIONS:
+		if r.x <= screen.x and r.y <= screen.y:
+			list.append(r)
+	if list.is_empty():
+		list.append(RESOLUTIONS[0])
+	return list
+
+
+func set_display(key: String, value) -> void:
+	display[key] = value
+	apply_display()
+	_save_settings()
+
+
+func apply_display() -> void:
+	Engine.max_fps = display.max_fps
+	DisplayServer.window_set_vsync_mode(DisplayServer.VSYNC_ENABLED if display.vsync else DisplayServer.VSYNC_DISABLED)
+	# The editor's embedded game view only allows a fixed window: mode and size are applied when
+	# the game runs in its own window (exported game, or embedding turned off in the editor)
+	if Engine.is_embedded_in_editor():
+		return
+	var window := get_window()
+	match display.mode:
+		"windowed":
+			window.mode = Window.MODE_WINDOWED
+			var res: Vector2i = display.resolution
+			var usable := DisplayServer.screen_get_usable_rect()
+			window.size = Vector2i(mini(res.x, usable.size.x), mini(res.y, usable.size.y))
+			window.position = usable.position + (usable.size - window.size) / 2
+		"exclusive":
+			window.mode = Window.MODE_EXCLUSIVE_FULLSCREEN
+		_:
+			window.mode = Window.MODE_FULLSCREEN
+	_update_3d_scale.call_deferred()
+
+
 # ---------- Audio ----------
 
 func get_volume(bus: String) -> float:
@@ -166,6 +227,8 @@ func _load_settings() -> void:
 	if cfg.load(SETTINGS_FILE) == OK:
 		for bus in _volumes:
 			_volumes[bus] = cfg.get_value("volume", bus, _volumes[bus])
+		for key in display:
+			display[key] = cfg.get_value("display", key, display[key])
 	for bus in _volumes:
 		_apply_volume(bus)
 
@@ -174,6 +237,8 @@ func _save_settings() -> void:
 	var cfg := ConfigFile.new()
 	for bus in _volumes:
 		cfg.set_value("volume", bus, _volumes[bus])
+	for key in display:
+		cfg.set_value("display", key, display[key])
 	cfg.save(SETTINGS_FILE)
 
 

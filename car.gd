@@ -30,6 +30,13 @@ const CAM_ROTATE_SPEED = 5.0
 @export var drift_speed_keep := 0.9       ## 0..1, share of the speed lost while sliding that is given back
 @export var max_drift_angle_deg := 45.0
 
+@export_group("Camera")
+@export var mouse_sensitivity := 0.003
+@export var stick_camera_speed := 2.5      ## rad/s at full right stick
+@export var camera_recenter_delay := 1.5  ## seconds without camera input before it swings back behind the car
+@export var camera_pitch_min := -0.25
+@export var camera_pitch_max := 0.6
+
 @export_group("Game over")
 @export var flip_tilt := 0.35             ## car up-vector dot world-up below this counts as flipped (~70 deg)
 @export var flip_time := 2.0              ## seconds stuck flipped before game over
@@ -48,6 +55,10 @@ var is_drifting := false
 var last_speed := 0.0
 var throttle_input := 0.0
 var _flipped_time := 0.0
+var _follow_yaw := 0.0
+var _cam_yaw := 0.0          # player offset around the car (mouse / right stick)
+var _cam_pitch := 0.0
+var _cam_idle := 0.0
 
 
 func _ready() -> void:
@@ -165,11 +176,14 @@ func update_slip() -> void:
 
 
 func _unhandled_input(event: InputEvent) -> void:
-	if event is InputEventKey and event.pressed and not event.echo:
-		match event.physical_keycode:
-			KEY_R:
-				if Game.state == Game.State.PLAYING:
-					reset_car()
+	if Game.state != Game.State.PLAYING:
+		return
+	if event.is_action_pressed("reset_car"):
+		reset_car()
+	elif event is InputEventMouseMotion and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
+		_cam_yaw -= event.relative.x * mouse_sensitivity
+		_cam_pitch += event.relative.y * mouse_sensitivity
+		_cam_idle = 0.0
 
 
 func reset_car() -> void:
@@ -185,9 +199,27 @@ func reset_car() -> void:
 
 func update_camera(delta: float) -> void:
 	camera_pivot.global_position = camera_pivot.global_position.lerp(global_position, delta * CAM_FOLLOW_SPEED)
-	camera_pivot.global_rotation.y = lerp_angle(camera_pivot.global_rotation.y, global_rotation.y, delta * CAM_ROTATE_SPEED)
+	_follow_yaw = lerp_angle(_follow_yaw, global_rotation.y, delta * CAM_ROTATE_SPEED)
+
+	var stick := Vector2.ZERO
+	if Game.state == Game.State.PLAYING:
+		stick = Input.get_vector("camera_left", "camera_right", "camera_up", "camera_down")
+	if stick.length() > 0.05:
+		_cam_yaw -= stick.x * stick_camera_speed * delta
+		_cam_pitch += stick.y * stick_camera_speed * delta
+		_cam_idle = 0.0
+	else:
+		_cam_idle += delta
+	if _cam_idle > camera_recenter_delay:
+		_cam_yaw = lerp_angle(_cam_yaw, 0.0, delta * 2.0)
+		_cam_pitch = lerpf(_cam_pitch, 0.0, delta * 2.0)
+	_cam_pitch = clampf(_cam_pitch, camera_pitch_min, camera_pitch_max)
+	camera_pivot.global_rotation = Vector3(_cam_pitch, _follow_yaw + _cam_yaw, 0.0)
 
 
 func snap_camera() -> void:
+	_follow_yaw = global_rotation.y
+	_cam_yaw = 0.0
+	_cam_pitch = 0.0
 	camera_pivot.global_position = global_position
-	camera_pivot.global_rotation = Vector3(0.0, global_rotation.y, 0.0)
+	camera_pivot.global_rotation = Vector3(0.0, _follow_yaw, 0.0)

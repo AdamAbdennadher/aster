@@ -14,8 +14,8 @@
 [ext_resource type="Material" uid="uid://cfr4exvey671f" path="res://models/car/materials/Matériau.019.tres" id="11_gfs8q"]
 [ext_resource type="Material" uid="uid://bvmks5nnlfx8h" path="res://models/car/materials/Matériau.009.tres" id="12_8tv1q"]
 [ext_resource type="Material" uid="uid://cbpgnqvbhu1pb" path="res://models/car/materials/Matériau.008.tres" id="13_v42uq"]
+[ext_resource type="Script" uid="uid://ccwndk2xjt44m" path="res://engine_audio.gd" id="engine_audio_script"]
 [ext_resource type="Script" uid="uid://ctrdee87btgxd" path="res://tire_fx.gd" id="tirefx_script"]
-[ext_resource type="Script" path="res://engine_audio.gd" id="engine_audio_script"]
 
 [sub_resource type="PhysicsMaterial" id="CarBodyMaterial"]
 friction = 0.25
@@ -828,7 +828,7 @@ shadow_mesh = SubResource("ArrayMesh_fs3k4")
 [node name="Node3D" type="Node3D" unique_id=1192189811]
 
 [node name="Car" type="VehicleBody3D" parent="." unique_id=853612847]
-mass = 45.0
+mass = 60.0
 physics_material_override = SubResource("CarBodyMaterial")
 gravity_scale = 3.0
 center_of_mass_mode = 1
@@ -962,5 +962,5 @@ transform = Transform3D(-0.9999999, 0.0001004848, -0.0006018871, -6.055418e-09, 
 [node name="TireFX" type="Node3D" parent="Car" unique_id=1493877193]
 script = ExtResource("tirefx_script")
 
-[node name="EngineAudio" type="Node" parent="Car"]
+[node name="EngineAudio" type="Node" parent="Car" unique_id=105380946]
 script = ExtResource("engine_audio_script")

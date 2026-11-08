@@ -141,7 +141,8 @@ func _intro() -> void:
 	t.tween_property(_title, "modulate:a", 1.0, 1.2).set_delay(0.4)
 	t.tween_property(_title, "offset_top", _title.offset_top - 10, 1.4).set_delay(0.4).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
 	t.tween_property(_play, "modulate:a", 1.0, 0.8).set_delay(1.3)
-	t.chain().tween_callback(_play.get_child(0).grab_focus)
+	# focus right away (not at the end of the intro) so A / Enter work immediately with a controller
+	_play.get_child(0).grab_focus.call_deferred()
 
 
 func _show_select() -> void:

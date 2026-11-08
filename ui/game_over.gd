@@ -69,5 +69,5 @@ func _button(text: String, action: Callable) -> NeonButton:
 
 
 func _unhandled_input(event: InputEvent) -> void:
-	if event is InputEventKey and event.pressed and not event.echo and event.physical_keycode == KEY_R:
+	if event.is_action_pressed("reset_car"):
 		Game.restart()
