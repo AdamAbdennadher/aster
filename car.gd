@@ -30,6 +30,10 @@ const CAM_ROTATE_SPEED = 5.0
 @export var drift_speed_keep := 0.9       ## 0..1, share of the speed lost while sliding that is given back
 @export var max_drift_angle_deg := 45.0
 
+@export_group("Game over")
+@export var flip_tilt := 0.35             ## car up-vector dot world-up below this counts as flipped (~70 deg)
+@export var flip_time := 2.0              ## seconds stuck flipped before game over
+
 @onready var camera_pivot: Node3D = $CameraPivot
 @onready var camera_3d: Camera3D = $CameraPivot/Camera3D
 @onready var rear_wheels: Array[VehicleWheel3D] = [$BL, $BR]
@@ -42,19 +46,24 @@ var speed := 0.0
 var slip_angle := 0.0          # radians, negative when the rear slides out to the right
 var is_drifting := false
 var last_speed := 0.0
+var throttle_input := 0.0
+var _flipped_time := 0.0
 
 
 func _ready() -> void:
-	Input.set_mouse_mode(Input.MOUSE_MODE_CAPTURED)
+	Game.state_changed.connect(_on_game_state)
+	_on_game_state(Game.state)
 	spawn_transform = global_transform
 	rear_base_grip = rear_wheels[0].wheel_friction_slip
 	snap_camera()
 
 
 func _physics_process(delta: float) -> void:
-	var throttle := Input.get_axis("brake", "accelerate")
-	var steer_input := Input.get_axis("steer_right", "steer_left")
-	var handbrake := Input.is_action_pressed("handbrake")
+	var playing := Game.state == Game.State.PLAYING
+	var throttle := Input.get_axis("brake", "accelerate") if playing else 0.0
+	var steer_input := Input.get_axis("steer_right", "steer_left") if playing else 0.0
+	var handbrake := Input.is_action_pressed("handbrake") if playing else false
+	throttle_input = throttle
 
 	update_slip()
 
@@ -87,7 +96,26 @@ func _physics_process(delta: float) -> void:
 		drift_assist(steer_input, handbrake, delta)
 	last_speed = speed
 
+	if playing:
+		_check_flipped(delta)
 	update_camera(delta)
+
+
+# Upside down or on its side and not moving anymore for flip_time seconds: game over (R still saves you before)
+func _check_flipped(delta: float) -> void:
+	if global_basis.y.dot(Vector3.UP) < flip_tilt and linear_velocity.length() < 4.0:
+		_flipped_time += delta
+		if _flipped_time >= flip_time:
+			Game.game_over()
+	else:
+		_flipped_time = 0.0
+
+
+func _on_game_state(state: Game.State) -> void:
+	if state == Game.State.PLAYING:
+		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+	else:
+		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 
 
 func is_on_ground() -> bool:
@@ -140,9 +168,8 @@ func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and not event.echo:
 		match event.physical_keycode:
 			KEY_R:
-				reset_car()
-			KEY_ESCAPE:
-				Input.set_mouse_mode(Input.MOUSE_MODE_VISIBLE)
+				if Game.state == Game.State.PLAYING:
+					reset_car()
 
 
 func reset_car() -> void:
@@ -151,6 +178,7 @@ func reset_car() -> void:
 	engine_force = 0.0
 	steering = 0.0
 	rear_grip_factor = 1.0
+	_flipped_time = 0.0
 	global_transform = spawn_transform
 	snap_camera()
 

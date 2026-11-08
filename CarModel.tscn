@@ -15,6 +15,7 @@
 [ext_resource type="Material" uid="uid://bvmks5nnlfx8h" path="res://models/car/materials/Matériau.009.tres" id="12_8tv1q"]
 [ext_resource type="Material" uid="uid://cbpgnqvbhu1pb" path="res://models/car/materials/Matériau.008.tres" id="13_v42uq"]
 [ext_resource type="Script" uid="uid://ctrdee87btgxd" path="res://tire_fx.gd" id="tirefx_script"]
+[ext_resource type="Script" path="res://engine_audio.gd" id="engine_audio_script"]
 
 [sub_resource type="PhysicsMaterial" id="CarBodyMaterial"]
 friction = 0.25
@@ -960,3 +961,6 @@ transform = Transform3D(-0.9999999, 0.0001004848, -0.0006018871, -6.055418e-09, 
 
 [node name="TireFX" type="Node3D" parent="Car" unique_id=1493877193]
 script = ExtResource("tirefx_script")
+
+[node name="EngineAudio" type="Node" parent="Car"]
+script = ExtResource("engine_audio_script")

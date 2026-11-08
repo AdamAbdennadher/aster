@@ -67,8 +67,11 @@ func _slide_intensity(wheel: VehicleWheel3D) -> float:
 		intensity = clampf(absf(car.slip_angle) / deg_to_rad(full_smoke_angle_deg), 0.0, 1.0)
 		if Input.is_action_pressed("handbrake") and car.speed > 3.0:
 			intensity = maxf(intensity, 0.6)
-	# get_skidinfo() is 1 with full grip and drops toward 0 when the wheel spins or locks (burnouts)
-	return maxf(intensity, 1.0 - wheel.get_skidinfo())
+	# get_skidinfo() is 1 with full grip and drops toward 0 when the wheel spins (burnouts).
+	# Only trusted on throttle: a wheel at rest also reports a low value.
+	if car.throttle_input > 0.3:
+		intensity = maxf(intensity, 1.0 - wheel.get_skidinfo())
+	return intensity
 
 
 func _add_mark(from: Vector3, to: Vector3, normal: Vector3) -> void:
