@@ -6,10 +6,12 @@ extends Node3D
 @export var full_smoke_angle_deg := 30.0  ## slip angle at which smoke and marks are at full strength
 
 @export_group("Smoke")
-@export var smoke_amount := 72
-@export var smoke_lifetime := 2.2
-@export var smoke_color := Color(1.0, 0.82, 0.8, 0.22)
-@export var smoke_size := 1.8
+@export var smoke_amount := 220
+@export var smoke_lifetime := 4.5
+@export var smoke_color := Color(1.0, 0.85, 0.85, 0.3)
+@export var smoke_size := 2.0
+@export var smoke_growth := 4.5          ## size multiplier reached at the end of a puff's life
+@export var smoke_rise := 0.15
 
 @export_group("Skid marks")
 @export var skid_width := 0.22
@@ -83,8 +85,8 @@ func _add_mark(from: Vector3, to: Vector3, normal: Vector3) -> void:
 
 func _create_smoke() -> GPUParticles3D:
 	var gradient := Gradient.new()
-	gradient.set_color(0, Color(1, 1, 1, 1))
-	gradient.set_color(1, Color(1, 1, 1, 0))
+	gradient.offsets = PackedFloat32Array([0.0, 0.5, 1.0])
+	gradient.colors = PackedColorArray([Color(1, 1, 1, 1), Color(1, 1, 1, 0.6), Color(1, 1, 1, 0)])
 	var puff := GradientTexture2D.new()
 	puff.gradient = gradient
 	puff.fill = GradientTexture2D.FILL_RADIAL
@@ -104,28 +106,31 @@ func _create_smoke() -> GPUParticles3D:
 	quad.material = draw_mat
 
 	var fade := Gradient.new()
-	fade.offsets = PackedFloat32Array([0.0, 0.15, 1.0])
-	fade.colors = PackedColorArray([Color(1, 1, 1, 0), Color(1, 1, 1, 1), Color(1, 1, 1, 0)])
+	fade.offsets = PackedFloat32Array([0.0, 0.08, 0.6, 1.0])
+	fade.colors = PackedColorArray([Color(1, 1, 1, 0), Color(1, 1, 1, 1), Color(1, 1, 1, 0.7), Color(1, 1, 1, 0)])
 	var fade_tex := GradientTexture1D.new()
 	fade_tex.gradient = fade
 
 	var grow := Curve.new()
-	grow.add_point(Vector2(0, 0.4))
-	grow.add_point(Vector2(1, 2.5))
+	grow.max_value = smoke_growth
+	grow.add_point(Vector2(0, 0.5))
+	grow.add_point(Vector2(0.3, smoke_growth * 0.6))
+	grow.add_point(Vector2(1, smoke_growth))
 	var grow_tex := CurveTexture.new()
 	grow_tex.curve = grow
 
 	var process := ParticleProcessMaterial.new()
 	process.emission_shape = ParticleProcessMaterial.EMISSION_SHAPE_SPHERE
-	process.emission_sphere_radius = 0.15
+	process.emission_sphere_radius = 0.25
 	process.direction = Vector3.UP
-	process.spread = 70.0
-	process.initial_velocity_min = 0.3
-	process.initial_velocity_max = 1.2
-	process.gravity = Vector3(0, 0.4, 0)
-	process.damping_min = 0.8
-	process.damping_max = 1.5
-	process.inherit_velocity_ratio = 0.25
+	process.spread = 90.0
+	process.initial_velocity_min = 0.5
+	process.initial_velocity_max = 2.0
+	process.gravity = Vector3(0, smoke_rise, 0)
+	# High damping makes puffs stop quickly and hang in the air, so they pile up behind the car
+	process.damping_min = 2.0
+	process.damping_max = 3.0
+	process.inherit_velocity_ratio = 0.15
 	process.scale_curve = grow_tex
 	process.color = smoke_color
 	process.color_ramp = fade_tex
@@ -141,7 +146,9 @@ func _create_smoke() -> GPUParticles3D:
 	smoke.process_material = process
 	smoke.draw_pass_1 = quad
 	smoke.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	smoke.visibility_aabb = AABB(Vector3(-10, -2, -10), Vector3(20, 10, 20))
+	smoke.draw_order = GPUParticles3D.DRAW_ORDER_VIEW_DEPTH
+	# Particles stay in world space while the emitter moves, so the box must cover the whole trail
+	smoke.visibility_aabb = AABB(Vector3(-100, -5, -100), Vector3(200, 25, 200))
 	add_child(smoke)
 	return smoke
 

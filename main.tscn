@@ -1,8 +1,0 @@
-[gd_scene format=3 uid="uid://c01jr1h6r1u4b"]
-
-[ext_resource type="PackedScene" uid="uid://bbe6ren2rw4qx" path="res://models/car/aster.blend" id="1_ig7tw"]
-
-[node name="main" type="Node3D" unique_id=1224641464]
-
-[node name="aster" parent="." unique_id=850488039 instance=ExtResource("1_ig7tw")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.105347514, 0.432445, -0.10453224)
