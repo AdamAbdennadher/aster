@@ -7,7 +7,7 @@ enum State { MENU, PLAYING, PAUSED, GAME_OVER }
 const MENU_SCENE := "res://menu.tscn"
 const GAME_OVER_SCENE := "res://ui/game_over.tscn"
 const SETTINGS_FILE := "user://settings.cfg"
-const PIXEL_ROWS := 360.0      # height of the 3D image in pixels, whatever the window size (matches postfx.gdshader)
+const PIXEL_ROWS := 540.0      # height of the 3D image in pixels, whatever the window size (matches postfx.gdshader)
 const MAPS := [
 	{"name": "MOUNTAIN", "scene": "res://mountain.tscn"},
 	{"name": "DESERT", "scene": "res://desert.tscn"},

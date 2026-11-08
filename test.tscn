@@ -1,7 +1,7 @@
 [gd_scene format=3 uid="uid://b50ohtm4t6qul"]
 
 [ext_resource type="PackedScene" uid="uid://bydo03yuwv03w" path="res://CarModel.tscn" id="1_37kl0"]
-[ext_resource type="Shader" path="res://ui/postfx.gdshader" id="postfx_shader"]
+[ext_resource type="Shader" uid="uid://10x2qtwltv87" path="res://ui/postfx.gdshader" id="postfx_shader"]
 
 [sub_resource type="ProceduralSkyMaterial" id="SkyMat"]
 sky_top_color = Color(0.12, 0.07, 0.28, 1)
@@ -151,6 +151,7 @@ shader_parameter/dither_strength = 0.92800004408
 shader_parameter/chromatic_aberration = 0.0015
 shader_parameter/vignette = 0.35
 shader_parameter/tint = Color(1, 0.96, 0.92, 1)
+shader_parameter/pixel_rows = 360.0
 
 [node name="World" type="Node3D" unique_id=174996584]
 

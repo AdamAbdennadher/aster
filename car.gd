@@ -13,6 +13,8 @@ const CAM_ROTATE_SPEED = 5.0
 @export var steer_rate := 4.0
 @export var drift_steer_bonus := 0.35     ## extra steering angle while drifting
 @export var countersteer_assist := 0.5
+@export var turn_sharpness := 1.5         ## 1 = what the steering angle gives, higher = tighter turns (wheel angle unchanged)
+@export var turn_assist_ramp := 0.8      ## seconds of holding the steering before the extra turning is fully on (a tap feels like before)
 
 @export_group("Drift")
 @export var handbrake_grip := 0.3         ## multiplier of the rear wheels' base friction
@@ -37,6 +39,12 @@ const CAM_ROTATE_SPEED = 5.0
 @export var camera_pitch_min := -0.25
 @export var camera_pitch_max := 0.6
 
+@export_group("Wheels")
+@export var wheel_model_height := -0.335   ## car-local height of the wheel centers in the model: wheels never go higher (no clipping into the body)
+@export var bump_stop_margin := 0.015      ## the bump stop starts pushing this far below the wheel arch
+@export var bump_stop_strength := 500.0
+@export var bump_stop_damping := 20.0
+
 @export_group("Game over")
 @export var flip_tilt := 0.35             ## car up-vector dot world-up below this counts as flipped (~70 deg)
 @export var flip_time := 2.0              ## seconds stuck flipped before game over
@@ -59,6 +67,8 @@ var _follow_yaw := 0.0
 var _cam_yaw := 0.0          # player offset around the car (mouse / right stick)
 var _cam_pitch := 0.0
 var _cam_idle := 0.0
+var _turn_blend := 0.0      # 0 = no turn assist, 1 = full; grows while the steering is held
+var _wheel_visuals: Array = []   # [wheel, mesh, mesh rest transform]
 
 
 func _ready() -> void:
@@ -66,6 +76,10 @@ func _ready() -> void:
 	_on_game_state(Game.state)
 	spawn_transform = global_transform
 	rear_base_grip = rear_wheels[0].wheel_friction_slip
+	for wheel in [$FL, $FR, $BL, $BR]:
+		for child in wheel.get_children():
+			if child is MeshInstance3D:
+				_wheel_visuals.append([wheel, child, child.transform])
 	snap_camera()
 
 
@@ -105,8 +119,12 @@ func _physics_process(delta: float) -> void:
 
 	if is_drifting and is_on_ground():
 		drift_assist(steer_input, handbrake, delta)
+		_turn_blend = 0.0
+	else:
+		_turn_assist(steer_input, delta)
 	last_speed = speed
 
+	_apply_bump_stops()
 	if playing:
 		_check_flipped(delta)
 	update_camera(delta)
@@ -127,6 +145,72 @@ func _on_game_state(state: Game.State) -> void:
 		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 	else:
 		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+
+
+# Bump stops: when a wheel gets close to the top of its arch (suspension fully compressed), push the body up
+# at that corner, so the body can never come down over the wheels further than the room left in the model.
+func _apply_bump_stops() -> void:
+	var up := global_basis.y
+	var inv := global_transform.affine_inverse()
+	for v in _wheel_visuals:
+		var wheel: VehicleWheel3D = v[0]
+		if not wheel.is_in_contact():
+			continue
+		var center := wheel.get_contact_point() + up * wheel.wheel_radius
+		var depth := (inv * center).y - (wheel_model_height - bump_stop_margin)
+		if depth <= 0.0:
+			continue
+		var offset := center - global_position
+		var closing := -(linear_velocity + angular_velocity.cross(offset)).dot(up)
+		var push := bump_stop_strength * depth + bump_stop_damping * maxf(closing, 0.0)
+		apply_force(up * push * mass, offset)
+
+
+# Godot's raycast suspension draws the wheel lower than its real contact, more so as the spring compresses,
+# so wheels visibly sink into the road. Lift each wheel mesh back onto the ground, but never above its place in
+# the model (visual only, physics unchanged).
+func _process(_delta: float) -> void:
+	var up := global_basis.y
+	for v in _wheel_visuals:
+		var wheel: VehicleWheel3D = v[0]
+		var mesh: MeshInstance3D = v[1]
+		mesh.transform = v[2]
+		if wheel.is_in_contact():
+			var sink := wheel.wheel_radius - (wheel.global_position - wheel.get_contact_point()).dot(up)
+			if sink > 0.0:
+				mesh.global_position += up * minf(sink, wheel.wheel_radius)
+		# never above the wheel arch of the model, even when the suspension is fully compressed
+		var above := (global_transform.affine_inverse() * mesh.global_position).y - wheel_model_height
+		if above > 0.0:
+			mesh.global_position -= up * above
+
+
+# Tighter turns without a bigger wheel angle: the car yaws turn_sharpness times faster than its steering angle
+# would give with perfect grip, and its trajectory follows the nose so it turns instead of sliding.
+func _turn_assist(steer_input: float, delta: float) -> void:
+	# fades in while the steering is held, drops quickly when released: taps keep the original feel
+	var held := absf(steer_input)
+	var rate := delta / maxf(turn_assist_ramp, 0.01) if held > _turn_blend else delta * 4.0
+	_turn_blend = move_toward(_turn_blend, held, rate)
+	if turn_sharpness <= 1.0 or _turn_blend < 0.01 or speed < 2.0 or absf(steering) < 0.02 or not is_on_ground():
+		return
+	var strength := _turn_blend * _turn_blend
+	var up := Vector3.UP
+	var forward_speed := (global_basis.inverse() * linear_velocity).z
+	var wheelbase := absf($FL.position.z - $BL.position.z)
+	var natural := forward_speed * tan(steering) / wheelbase
+	var desired := natural * turn_sharpness
+	var yaw := angular_velocity.dot(up)
+	var yaw_change := up * (desired - yaw) * clampf(6.0 * delta, 0.0, 1.0) * strength
+	# impulses add to the physics step instead of overwriting it (setting the velocities would cancel the engine)
+	apply_torque_impulse(get_inverse_inertia_tensor().inverse() * yaw_change)
+
+	var vel := linear_velocity
+	var flat := Vector3(vel.x, 0.0, vel.z)
+	var nose := Vector3(global_basis.z.x, 0.0, global_basis.z.z).normalized() * signf(forward_speed)
+	var max_turn := (absf(desired) + 0.5) * delta * strength
+	var turned := flat.rotated(up, clampf(flat.signed_angle_to(nose, up), -max_turn, max_turn))
+	apply_central_impulse((turned - flat) * mass)
 
 
 func is_on_ground() -> bool:
