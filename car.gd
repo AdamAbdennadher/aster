@@ -52,8 +52,8 @@ func _ready() -> void:
 
 
 func _physics_process(delta: float) -> void:
-	var throttle := Input.get_axis("ui_down", "ui_up")
-	var steer_input := Input.get_axis("ui_right", "ui_left")
+	var throttle := Input.get_axis("brake", "accelerate")
+	var steer_input := Input.get_axis("steer_right", "steer_left")
 	var handbrake := Input.is_action_pressed("handbrake")
 
 	update_slip()
@@ -129,7 +129,7 @@ func update_slip() -> void:
 	var local_vel := global_basis.inverse() * linear_velocity
 	local_vel.y = 0.0
 	speed = local_vel.length()
-	var reversing := local_vel.z < 0.0 and Input.get_axis("ui_down", "ui_up") < 0.0
+	var reversing := local_vel.z < 0.0 and Input.get_axis("brake", "accelerate") < 0.0
 	if speed > 1.0 and not reversing:
 		slip_angle = atan2(local_vel.x, local_vel.z)
 	else:

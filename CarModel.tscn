@@ -14,6 +14,7 @@
 [ext_resource type="Material" uid="uid://cfr4exvey671f" path="res://models/car/materials/Matériau.019.tres" id="11_gfs8q"]
 [ext_resource type="Material" uid="uid://bvmks5nnlfx8h" path="res://models/car/materials/Matériau.009.tres" id="12_8tv1q"]
 [ext_resource type="Material" uid="uid://cbpgnqvbhu1pb" path="res://models/car/materials/Matériau.008.tres" id="13_v42uq"]
+[ext_resource type="Script" uid="uid://ctrdee87btgxd" path="res://tire_fx.gd" id="tirefx_script"]
 
 [sub_resource type="PhysicsMaterial" id="CarBodyMaterial"]
 friction = 0.25
@@ -889,6 +890,7 @@ mesh = SubResource("ArrayMesh_y4vny")
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="Car" unique_id=1082921053]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.024597168, 0.022177339, 0.01404357)
+visible = false
 shape = SubResource("BoxShape3D_5ctvf")
 
 [node name="BL" type="VehicleWheel3D" parent="Car" unique_id=179425887]
@@ -954,4 +956,7 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.056, 0.39175773)
 top_level = true
 
 [node name="Camera3D" type="Camera3D" parent="Car/CameraPivot" unique_id=1076066352]
-transform = Transform3D(-0.9999999, 0.0001004848, -0.0006018871, -6.055418e-09, 0.986347, 0.16468027, 0.00061021745, 0.16468024, -0.98634684, 0.006021738, 0.8758599, -3.816611)
+transform = Transform3D(-0.9999999, 0.0001004848, -0.0006018871, -6.055418e-09, 0.986347, 0.16468027, 0.00061021745, 0.16468024, -0.98634684, 0.006021738, 0.96542114, -3.9392612)
+
+[node name="TireFX" type="Node3D" parent="Car" unique_id=1493877193]
+script = ExtResource("tirefx_script")

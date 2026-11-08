@@ -3,8 +3,13 @@
 [ext_resource type="PackedScene" uid="uid://bydo03yuwv03w" path="res://CarModel.tscn" id="1_car"]
 
 [sub_resource type="ProceduralSkyMaterial" id="SkyMat"]
-sky_horizon_color = Color(0.66, 0.67, 0.7, 1)
-ground_horizon_color = Color(0.66, 0.67, 0.7, 1)
+sky_top_color = Color(0.12, 0.07, 0.28, 1)
+sky_horizon_color = Color(1, 0.48, 0.36, 1)
+sky_curve = 0.12
+ground_bottom_color = Color(0.08, 0.04, 0.12, 1)
+ground_horizon_color = Color(1, 0.48, 0.36, 1)
+sun_angle_max = 20.0
+sun_curve = 0.08
 
 [sub_resource type="Sky" id="Sky"]
 sky_material = SubResource("SkyMat")
@@ -12,17 +17,35 @@ sky_material = SubResource("SkyMat")
 [sub_resource type="Environment" id="Env"]
 background_mode = 2
 sky = SubResource("Sky")
-ambient_light_source = 3
-tonemap_mode = 2
+ambient_light_color = Color(0.67481464, 0.67481464, 0.6748146, 1)
+ambient_light_sky_contribution = 0.11
+ambient_light_energy = 0.8
+tonemap_mode = 4
+tonemap_exposure = 1.05
 ssao_enabled = true
 glow_enabled = true
+glow_intensity = 1.0
+glow_strength = 1.2
+glow_bloom = 0.08
+glow_hdr_threshold = 0.9
+fog_enabled = true
+fog_light_color = Color(0.81960785, 0.4, 0.15294118, 1)
+fog_light_energy = 0.5
+fog_sun_scatter = 0.5
+fog_density = 0.0
+fog_aerial_perspective = 1.0
+fog_sky_affect = 0.0
+fog_height_density = 0.5614
+adjustment_enabled = true
+adjustment_saturation = 1.2
 
 [sub_resource type="Shader" id="GridShader"]
 code = "shader_type spatial;
 
-uniform vec3 color_a : source_color = vec3(0.35, 0.37, 0.4);
-uniform vec3 color_b : source_color = vec3(0.28, 0.3, 0.33);
-uniform vec3 line_color : source_color = vec3(0.9, 0.9, 0.9);
+uniform vec3 color_a : source_color = vec3(0.2, 0.18, 0.22);
+uniform vec3 color_b : source_color = vec3(0.17, 0.15, 0.19);
+uniform vec3 line_color : source_color = vec3(1.0, 0.2, 0.75);
+uniform float line_glow = 3.0;
 uniform float cell_size = 4.0;
 uniform float line_width = 0.05;
 
@@ -37,20 +60,21 @@ void fragment() {
 	vec2 cell = floor(p);
 	float checker = mod(cell.x + cell.y, 2.0);
 	vec3 col = mix(color_a, color_b, checker);
-	// une ligne blanche tous les 10 carreaux (40 m) pour se reperer
 	vec2 big = abs(fract(p / 10.0 + 0.5) - 0.5) * 10.0;
 	float line = 1.0 - step(line_width, min(big.x, big.y));
 	ALBEDO = mix(col, line_color, line);
-	ROUGHNESS = 0.9;
+	EMISSION = line_color * line * line_glow;
+	ROUGHNESS = 0.6;
 }
 "
 
 [sub_resource type="ShaderMaterial" id="GridMat"]
 render_priority = 0
 shader = SubResource("GridShader")
-shader_parameter/color_a = Color(0.35, 0.37, 0.4, 1)
-shader_parameter/color_b = Color(0.28, 0.3, 0.33, 1)
-shader_parameter/line_color = Color(0.9, 0.9, 0.9, 1)
+shader_parameter/color_a = Color(0.2, 0.18, 0.22, 1)
+shader_parameter/color_b = Color(0.17, 0.15, 0.19, 1)
+shader_parameter/line_color = Color(1, 0.2, 0.75, 1)
+shader_parameter/line_glow = 3.0
 shader_parameter/cell_size = 4.0
 shader_parameter/line_width = 0.05
 
@@ -107,7 +131,10 @@ material = SubResource("BlueMat")
 [sub_resource type="BoxShape3D" id="CrateShape"]
 
 [sub_resource type="StandardMaterial3D" id="WallMat"]
-albedo_color = Color(0.55, 0.55, 0.58, 1)
+albedo_color = Color(0.06, 0.05, 0.09, 1)
+emission_enabled = true
+emission = Color(0.1, 0.85, 1, 1)
+emission_energy_multiplier = 0.6
 
 [sub_resource type="BoxMesh" id="WallMesh"]
 material = SubResource("WallMat")
@@ -116,14 +143,61 @@ size = Vector3(300, 3, 1)
 [sub_resource type="BoxShape3D" id="WallShape"]
 size = Vector3(300, 3, 1)
 
+[sub_resource type="Shader" id="PostFXShader"]
+code = "shader_type canvas_item;
+
+uniform sampler2D screen_tex : hint_screen_texture, filter_nearest;
+uniform float color_levels : hint_range(2.0, 64.0) = 32.0;
+uniform float dither_strength : hint_range(0.0, 2.0) = 0.5;
+uniform float chromatic_aberration : hint_range(0.0, 0.01) = 0.0015;
+uniform float vignette : hint_range(0.0, 1.0) = 0.35;
+uniform vec3 tint : source_color = vec3(1.0, 0.96, 0.92);
+
+const float BAYER[16] = float[](
+	0.0, 8.0, 2.0, 10.0,
+	12.0, 4.0, 14.0, 6.0,
+	3.0, 11.0, 1.0, 9.0,
+	15.0, 7.0, 13.0, 5.0
+);
+
+void fragment() {
+	vec2 uv = SCREEN_UV;
+	vec2 offset = (uv - 0.5) * chromatic_aberration;
+	vec3 c = vec3(
+		texture(screen_tex, uv + offset).r,
+		texture(screen_tex, uv).g,
+		texture(screen_tex, uv - offset).b
+	);
+	ivec2 p = ivec2(FRAGCOORD.xy) % 4;
+	float threshold = BAYER[p.y * 4 + p.x] / 16.0 - 0.5;
+	c += threshold * dither_strength / color_levels;
+	c = floor(c * color_levels + 0.5) / color_levels;
+	c *= mix(1.0, smoothstep(0.85, 0.25, length(uv - 0.5)), vignette);
+	COLOR = vec4(c * tint, 1.0);
+}
+"
+
+[sub_resource type="ShaderMaterial" id="PostFXMat"]
+shader = SubResource("PostFXShader")
+shader_parameter/color_levels = 34.09600152456
+shader_parameter/dither_strength = 0.92800004408
+shader_parameter/chromatic_aberration = 0.0015
+shader_parameter/vignette = 0.35
+shader_parameter/tint = Color(1, 0.96, 0.92, 1)
+
 [node name="World" type="Node3D" unique_id=174996584]
 
 [node name="WorldEnvironment" type="WorldEnvironment" parent="." unique_id=255745339]
 environment = SubResource("Env")
 
 [node name="Sun" type="DirectionalLight3D" parent="." unique_id=317575546]
-transform = Transform3D(-0.866, -0.433, 0.25, 0, 0.5, 0.866, -0.5, 0.75, -0.433, 0, 20, 0)
+transform = Transform3D(0.66131186, -0.15339474, 0.73425895, 0, 0.9788674, 0.20449595, -0.75011104, -0.13523565, 0.64733636, 0, 20, 0)
+light_color = Color(1, 0.62, 0.36, 1)
+light_energy = 1.6
 shadow_enabled = true
+shadow_opacity = 0.8
+shadow_blur = 1.169
+directional_shadow_fade_start = 0.738
 directional_shadow_max_distance = 150.0
 
 [node name="Car" parent="." unique_id=2073425122 instance=ExtResource("1_car")]
@@ -359,3 +433,14 @@ mesh = SubResource("WallMesh")
 
 [node name="Shape" type="CollisionShape3D" parent="Walls/West" unique_id=82621487]
 shape = SubResource("WallShape")
+
+[node name="PostFX" type="CanvasLayer" parent="." unique_id=1660196127]
+
+[node name="Filter" type="ColorRect" parent="PostFX" unique_id=576244923]
+material = SubResource("PostFXMat")
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
