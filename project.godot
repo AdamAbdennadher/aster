@@ -125,5 +125,6 @@ camera_down={
 [rendering]
 
 rendering_device/driver.windows="d3d12"
+textures/vram_compression/import_etc2_astc=true
 scaling_3d/mode=5
 scaling_3d/scale=0.5
