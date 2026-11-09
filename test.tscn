@@ -169,7 +169,7 @@ directional_shadow_fade_start = 0.738
 directional_shadow_max_distance = 150.0
 
 [node name="Car" parent="." unique_id=2073425122 instance=ExtResource("1_37kl0")]
-transform = Transform3D(-1, 0, 0, 0, 1, 0, 0, 0, -1, 0, 1, 0)
+transform = Transform3D(-1, 0, 0, 0, 1, 0, 0, 0, -1, 0, 0.68, 0)
 
 [node name="Ground" type="StaticBody3D" parent="." unique_id=2095594427]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.5, 0)

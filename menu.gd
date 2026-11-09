@@ -16,7 +16,8 @@ var _cam_blend := 0.0          # 0 = title framing, 1 = map select framing
 var _time := 0.0
 
 var _title: Label
-var _play: Control
+var _play: Control            # holds the play and exit buttons
+var _play_button: NeonButton
 var _maps: Control
 var _back: Control
 var _in_select := false
@@ -99,7 +100,18 @@ func _build_ui() -> void:
 	play.text = "play"
 	play.text_size = 20
 	play.pressed.connect(_show_select)
-	_play = _centered(panel, play, 200)
+	_play_button = play
+	var quit := NeonButton.new()
+	quit.text = "exit"
+	quit.text_size = 13
+	quit.rest_alpha = 0.4
+	quit.pressed.connect(get_tree().quit)
+	var buttons := VBoxContainer.new()
+	buttons.alignment = BoxContainer.ALIGNMENT_CENTER
+	buttons.add_theme_constant_override("separation", 6)
+	buttons.add_child(play)
+	buttons.add_child(quit)
+	_play = _centered(panel, buttons, 200)
 
 	var list := VBoxContainer.new()
 	list.add_theme_constant_override("separation", 14)
@@ -142,7 +154,7 @@ func _intro() -> void:
 	t.tween_property(_title, "offset_top", _title.offset_top - 10, 1.4).set_delay(0.4).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
 	t.tween_property(_play, "modulate:a", 1.0, 0.8).set_delay(1.3)
 	# focus right away (not at the end of the intro) so A / Enter work immediately with a controller
-	_play.get_child(0).grab_focus.call_deferred()
+	_play_button.grab_focus.call_deferred()
 
 
 func _show_select() -> void:
@@ -156,7 +168,7 @@ func _show_select() -> void:
 func _show_title() -> void:
 	_in_select = false
 	_animate(false)
-	_play.get_child(0).grab_focus()
+	_play_button.grab_focus()
 
 
 func _animate(to_select: bool) -> void:

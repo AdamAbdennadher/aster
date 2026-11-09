@@ -32,6 +32,7 @@ enum Surface { ASPHALT, DIRT }
 @export var verge_width := 1.2            ## gravel/snow strip on each side of the road
 @export var guardrail_curvature := 0.014  ## 1/m, corners tighter than ~70 m radius get a rail on the outside
 @export var spawn_sample := 5             ## where the car starts along the road (1 sample = 2 m)
+@export var spawn_height := 0.68           ## car body height above the road at spawn (it rests at about 0.65, so it barely drops)
 
 @export_group("Terrain")
 @export var map_size := 1400.0
@@ -352,8 +353,9 @@ func _build_terrain() -> void:
 			_find_nearest(x, z)
 			var h := nat
 			if _nearest_dist < INF:
-				var blend := smoothstep(road_half + 1.5, road_half + 28.0, _nearest_dist)
-				h = lerpf(samples[_nearest_index].y - 0.3, nat, blend)
+				# flat just under the road, and over the end of its rounded shoulder (which dips to -0.45 m, 3 m out)
+				var blend := smoothstep(road_half + 3.5, road_half + 28.0, _nearest_dist)
+				h = lerpf(samples[_nearest_index].y - 0.35, nat, blend)
 			_heights[iz * n + ix] = h
 			near_road[iz * n + ix] = _nearest_dist
 
@@ -425,9 +427,22 @@ func _build_road_mesh() -> void:
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
 	var half := road_width * 0.5 + verge_width
 	var count := samples.size()
-	# Per row: outer skirt, left edge, center, right edge, outer skirt (UV.x = meters from center, UV.y = distance)
-	var lateral := [-half - 0.6, -half, 0.0, half, half + 0.6]
-	var drop := [-1.5, 0.0, 0.0, 0.0, -1.5]
+	# Per row, from left to right: hidden skirt, rounded shoulder, road edge, center, road edge, rounded shoulder, hidden skirt.
+	# The shoulder eases down 30 cm (to the terrain level next to the road) over 2.5 m, so driving back onto
+	# the road is a gentle slope instead of a step. UV.x = meters from center, UV.y = distance along the road.
+	var shoulder := [1.0, 2.0, 3.0]
+	var lateral := [-half - 3.8]
+	var drop := [-1.2]
+	for k in range(shoulder.size() - 1, -1, -1):
+		lateral.append(-half - shoulder[k])
+		drop.append(_shoulder_drop(shoulder[k] / shoulder[-1]))
+	lateral.append_array([-half, 0.0, half])
+	drop.append_array([0.0, 0.0, 0.0])
+	for k in shoulder.size():
+		lateral.append(half + shoulder[k])
+		drop.append(_shoulder_drop(shoulder[k] / shoulder[-1]))
+	lateral.append(half + 3.8)
+	drop.append(-1.2)
 	for i in count + 1:
 		var k := i % count
 		var c := samples[k]
@@ -462,6 +477,11 @@ func _build_road_mesh() -> void:
 		mat.set_shader_parameter("dirt_color", Color(0.55, 0.55, 0.6))
 	mesh.surface_set_material(0, mat)
 	_add_static_mesh("Road", mesh)
+
+
+# 0 at the road edge, -0.45 m at the end of the shoulder, with a smooth (cosine) curve in between
+func _shoulder_drop(t: float) -> float:
+	return -0.45 * (1.0 - cos(PI * clampf(t, 0.0, 1.0))) * 0.5
 
 
 func _road_shader() -> Shader:
@@ -931,7 +951,7 @@ func _place_car() -> void:
 	var i := clampi(spawn_sample, 0, samples.size() - 1)
 	var forward := Vector3(tangents[i].x, 0.0, tangents[i].z).normalized()
 	# The VehicleBody3D drives along +Z, looking_at points -Z at the target
-	car_root.global_transform = Transform3D(Basis.looking_at(-forward, Vector3.UP), samples[i] + Vector3.UP * 1.0)
+	car_root.global_transform = Transform3D(Basis.looking_at(-forward, Vector3.UP), samples[i] + Vector3.UP * spawn_height)
 	var car := car_root.get_node_or_null("Car")
 	if car:
 		car.spawn_transform = car.global_transform
