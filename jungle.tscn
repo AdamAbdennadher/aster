@@ -1,7 +1,7 @@
-[gd_scene format=3 uid="uid://b47iqqtv3aybh"]
+[gd_scene format=3 uid="uid://8x3toesd6hqj"]
 
-[ext_resource type="Script" uid="uid://xntkipvhh8x8" path="res://track.gd" id="1_gen"]
-[ext_resource type="PackedScene" uid="uid://bydo03yuwv03w" path="res://CarModel.tscn" id="2_car"]
+[ext_resource type="Script" path="res://track.gd" id="1_gen"]
+[ext_resource type="PackedScene" uid="uid://crxuahqbffn0l" path="res://CarModel.tscn" id="2_car"]
 [ext_resource type="Shader" uid="uid://10x2qtwltv87" path="res://ui/postfx.gdshader" id="postfx_shader"]
 
 [sub_resource type="Curve3D" id="RoadCurve"]

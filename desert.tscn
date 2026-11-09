@@ -1,7 +1,7 @@
-[gd_scene format=3 uid="uid://cuc8wihylyhv1"]
+[gd_scene format=3 uid="uid://f3ipjiiua4ot"]
 
-[ext_resource type="Script" uid="uid://xntkipvhh8x8" path="res://track.gd" id="1_gen"]
-[ext_resource type="PackedScene" uid="uid://bydo03yuwv03w" path="res://CarModel.tscn" id="2_car"]
+[ext_resource type="Script" path="res://track.gd" id="1_gen"]
+[ext_resource type="PackedScene" uid="uid://crxuahqbffn0l" path="res://CarModel.tscn" id="2_car"]
 [ext_resource type="Shader" uid="uid://10x2qtwltv87" path="res://ui/postfx.gdshader" id="postfx_shader"]
 
 [sub_resource type="Curve3D" id="RoadCurve"]
@@ -65,6 +65,7 @@ map_seed = 21
 road_points = PackedVector3Array(-350, 170, 12, -220, 200, 10, -100, 175, 8, 20, 205, 7, 140, 180, 9, 250, 195, 12, 340, 150, 16, 370, 70, 20, 320, 10, 23, 345, -60, 26, 290, -120, 28, 220, -140, 29, 160, -100, 30, 100, -150, 30, 40, -100, 29, -20, -150, 28, -80, -110, 26, -170, -140, 24, -250, -90, 21, -330, -110, 19, -380, -30, 17, -390, 70, 14)
 road_height_scale = 1.4
 road_width = 10.0
+surface_sections = PackedVector3Array()
 hill_height = 10.0
 mountain_height = 140.0
 terrace_step = 14.0

@@ -1,7 +1,7 @@
 extends Node
 ## Autoload "Music": menu track + shuffled in-game playlist with crossfades, and a small "now playing" widget.
 
-const CONFIG := "res://music_config.tres"   # open it in the Inspector to change the tracks
+const CONFIG := "res://resources/music_config.tres"   # open it in the Inspector to change the tracks
 
 var _menu_track := ""
 var _playlist: Array[String] = []

@@ -1,6 +1,6 @@
 [gd_resource type="Resource" script_class="MusicConfig" format=3 uid="uid://dxrb1b0oi7ra7"]
 
-[ext_resource type="Script" uid="uid://bu5540lxrv0jw" path="res://music_config.gd" id="1_cfg"]
+[ext_resource type="Script" uid="uid://bu5540lxrv0jw" path="res://scripts/music_config.gd" id="1_cfg"]
 [ext_resource type="AudioStream" uid="uid://mdvbwlvxdr4e" path="res://sounds/musics/mainMenu.mp3" id="2_menu"]
 [ext_resource type="AudioStream" uid="uid://dra2f45or5i66" path="res://sounds/musics/falco.mp3" id="3_falco"]
 [ext_resource type="AudioStream" uid="uid://bggmsymacnh40" path="res://sounds/musics/fox.mp3" id="4_fox"]

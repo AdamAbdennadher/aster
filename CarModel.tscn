@@ -1,6 +1,6 @@
-[gd_scene format=4 uid="uid://bydo03yuwv03w"]
+[gd_scene format=4 uid="uid://crxuahqbffn0l"]
 
-[ext_resource type="Script" uid="uid://hnp185i7pvat" path="res://car.gd" id="1_br2n7"]
+[ext_resource type="Script" path="res://car.gd" id="1_br2n7"]
 [ext_resource type="Material" uid="uid://d2qviy2iive3t" path="res://models/car/materials/Matériau.005.tres" id="1_we3gq"]
 [ext_resource type="Material" uid="uid://cqp7vi2tohgc8" path="res://models/car/materials/Matériau.tres" id="2_br2n7"]
 [ext_resource type="Material" uid="uid://dpmybkv8y3r8b" path="res://models/car/materials/Matériau.002.tres" id="3_nu8xe"]
@@ -14,8 +14,8 @@
 [ext_resource type="Material" uid="uid://cfr4exvey671f" path="res://models/car/materials/Matériau.019.tres" id="11_gfs8q"]
 [ext_resource type="Material" uid="uid://bvmks5nnlfx8h" path="res://models/car/materials/Matériau.009.tres" id="12_8tv1q"]
 [ext_resource type="Material" uid="uid://cbpgnqvbhu1pb" path="res://models/car/materials/Matériau.008.tres" id="13_v42uq"]
-[ext_resource type="Script" uid="uid://ccwndk2xjt44m" path="res://engine_audio.gd" id="engine_audio_script"]
-[ext_resource type="Script" uid="uid://ctrdee87btgxd" path="res://tire_fx.gd" id="tirefx_script"]
+[ext_resource type="Script" path="res://engine_audio.gd" id="engine_audio_script"]
+[ext_resource type="Script" path="res://tire_fx.gd" id="tirefx_script"]
 
 [sub_resource type="PhysicsMaterial" id="CarBodyMaterial"]
 friction = 0.25

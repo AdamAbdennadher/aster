@@ -1,7 +1,7 @@
-[gd_scene format=3 uid="uid://dgddj8cylipwo"]
+[gd_scene format=3 uid="uid://300hhr5pwh77"]
 
-[ext_resource type="Script" uid="uid://xntkipvhh8x8" path="res://track.gd" id="1_gen"]
-[ext_resource type="PackedScene" uid="uid://bydo03yuwv03w" path="res://CarModel.tscn" id="2_car"]
+[ext_resource type="Script" path="res://track.gd" id="1_gen"]
+[ext_resource type="PackedScene" uid="uid://crxuahqbffn0l" path="res://CarModel.tscn" id="2_car"]
 [ext_resource type="Shader" uid="uid://10x2qtwltv87" path="res://ui/postfx.gdshader" id="postfx_shader"]
 
 [sub_resource type="Curve3D" id="RoadCurve"]
@@ -66,6 +66,7 @@ road_points = PackedVector3Array(0, 200, 0, 0, 100, 2, 40, 30, 5, 140, 0, 9, 240
 road_height_scale = 2.0
 road_width = 8.0
 verge_width = 1.0
+surface_sections = PackedVector3Array()
 hill_height = 30.0
 mountain_height = 260.0
 snowfall = true

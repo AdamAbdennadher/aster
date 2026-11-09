@@ -98,7 +98,7 @@ func _ready() -> void:
 	generate()
 	if not Engine.is_editor_hint():
 		_place_car()
-		var race: Node = load("res://race.gd").new()
+		var race: Node = load("res://scripts/race.gd").new()
 		race.name = "Race"
 		race.setup(self, finish_index())
 		add_child(race)

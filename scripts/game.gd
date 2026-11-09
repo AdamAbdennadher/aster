@@ -4,18 +4,18 @@ extends Node
 
 enum State { MENU, PLAYING, PAUSED, GAME_OVER }
 
-const MENU_SCENE := "res://menu.tscn"
+const MENU_SCENE := "res://scenes/menu.tscn"
 const GAME_OVER_SCENE := "res://ui/game_over.tscn"
 const SETTINGS_FILE := "user://settings.cfg"
 const RECORDS_FILE := "user://records.cfg"
 const RECORDS_KEPT := 5
 const PIXEL_ROWS := 540.0      # height of the 3D image in pixels, whatever the window size (matches postfx.gdshader)
 const MAPS := [
-	{"name": "MOUNTAIN", "scene": "res://mountain.tscn"},
-	{"name": "DESERT", "scene": "res://desert.tscn"},
-	{"name": "SNOW", "scene": "res://snow.tscn"},
-	{"name": "JUNGLE", "scene": "res://jungle.tscn"},
-	{"name": "TRAINING", "scene": "res://training.tscn"},
+	{"name": "MOUNTAIN", "scene": "res://scenes/maps/mountain.tscn"},
+	{"name": "DESERT", "scene": "res://scenes/maps/desert.tscn"},
+	{"name": "SNOW", "scene": "res://scenes/maps/snow.tscn"},
+	{"name": "JUNGLE", "scene": "res://scenes/maps/jungle.tscn"},
+	{"name": "TRAINING", "scene": "res://scenes/maps/training.tscn"},
 ]
 
 signal state_changed(state: State)

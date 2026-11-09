@@ -1,13 +1,13 @@
-[gd_scene format=3]
+[gd_scene format=3 uid="uid://di1m8ktfk7vvy"]
 
 [ext_resource type="Script" path="res://menu.gd" id="1_menu"]
-[ext_resource type="PackedScene" path="res://desert.tscn" id="2_desert"]
+[ext_resource type="PackedScene" uid="uid://f3ipjiiua4ot" path="res://desert.tscn" id="2_desert"]
 
-[node name="Menu" type="Node3D"]
+[node name="Menu" type="Node3D" unique_id=2049705943]
 script = ExtResource("1_menu")
 
-[node name="Desert" parent="." instance=ExtResource("2_desert")]
+[node name="Desert" parent="." unique_id=532429054 instance=ExtResource("2_desert")]
+surface_sections = PackedVector3Array()
 
-[node name="MenuCamera" type="Camera3D" parent="."]
+[node name="MenuCamera" type="Camera3D" parent="." unique_id=2078370238]
 fov = 60.0
-far = 4000.0
