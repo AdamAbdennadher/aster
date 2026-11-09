@@ -1,8 +1,16 @@
-[gd_scene format=3]
+[gd_scene format=3 uid="uid://dgddj8cylipwo"]
 
-[ext_resource type="Script" path="res://track.gd" id="1_gen"]
+[ext_resource type="Script" uid="uid://xntkipvhh8x8" path="res://track.gd" id="1_gen"]
 [ext_resource type="PackedScene" uid="uid://bydo03yuwv03w" path="res://CarModel.tscn" id="2_car"]
-[ext_resource type="Shader" path="res://ui/postfx.gdshader" id="postfx_shader"]
+[ext_resource type="Shader" uid="uid://10x2qtwltv87" path="res://ui/postfx.gdshader" id="postfx_shader"]
+
+[sub_resource type="Curve3D" id="RoadCurve"]
+closed = true
+_data = {
+"points": PackedVector3Array(0, 0, 0, 0, 0, 0, 0, 0, 200, 0, 0, 0, 0, 0, 0, 0, 4, 100, 0, 0, 0, 0, 0, 0, 40, 10, 30, 0, 0, 0, 0, 0, 0, 140, 18, 0, 0, 0, 0, 0, 0, 0, 240, 24, -10, 0, 0, 0, 0, 0, 0, 275, 28, -40, 0, 0, 0, 0, 0, 0, 240, 32, -70, 0, 0, 0, 0, 0, 0, 140, 38, -70, 0, 0, 0, 0, 0, 0, 105, 42, -100, 0, 0, 0, 0, 0, 0, 140, 46, -130, 0, 0, 0, 0, 0, 0, 240, 52, -130, 0, 0, 0, 0, 0, 0, 275, 56, -160, 0, 0, 0, 0, 0, 0, 240, 60, -190, 0, 0, 0, 0, 0, 0, 150, 64, -200, 0, 0, 0, 0, 0, 0, 40, 68, -240, 0, 0, 0, 0, 0, 0, -80, 70, -210, 0, 0, 0, 0, 0, 0, -180, 70, -250, 0, 0, 0, 0, 0, 0, -280, 68, -225, 0, 0, 0, 0, 0, 0, -340, 64, -160, 0, 0, 0, 0, 0, 0, -300, 62, -125, 0, 0, 0, 0, 0, 0, -210, 60, -140, 0, 0, 0, 0, 0, 0, -175, 56, -110, 0, 0, 0, 0, 0, 0, -210, 52, -80, 0, 0, 0, 0, 0, 0, -310, 48, -80, 0, 0, 0, 0, 0, 0, -345, 44, -50, 0, 0, 0, 0, 0, 0, -310, 40, -20, 0, 0, 0, 0, 0, 0, -210, 36, -20, 0, 0, 0, 0, 0, 0, -175, 32, 10, 0, 0, 0, 0, 0, 0, -210, 28, 40, 0, 0, 0, 0, 0, 0, -300, 24, 50, 0, 0, 0, 0, 0, 0, -330, 18, 130, 0, 0, 0, 0, 0, 0, -250, 12, 220, 0, 0, 0, 0, 0, 0, -120, 6, 250, 0, 0, 0, 0, 0, 0, -50, 2, 240),
+"tilts": PackedFloat32Array(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
+}
+point_count = 34
 
 [sub_resource type="ProceduralSkyMaterial" id="SkyMat"]
 sky_top_color = Color(0.09, 0.09, 0.3, 1)
@@ -48,35 +56,28 @@ shader_parameter/dither_strength = 0.92800004408
 shader_parameter/chromatic_aberration = 0.0015
 shader_parameter/vignette = 0.35
 shader_parameter/tint = Color(1, 0.96, 0.92, 1)
+shader_parameter/pixel_rows = 360.0
 
-[sub_resource type="Curve3D" id="RoadCurve"]
-closed = true
-_data = {
-"points": PackedVector3Array(0, 0, 0, 0, 0, 0, 0, 0, 200, 0, 0, 0, 0, 0, 0, 0, 4, 100, 0, 0, 0, 0, 0, 0, 40, 10, 30, 0, 0, 0, 0, 0, 0, 140, 18, 0, 0, 0, 0, 0, 0, 0, 240, 24, -10, 0, 0, 0, 0, 0, 0, 275, 28, -40, 0, 0, 0, 0, 0, 0, 240, 32, -70, 0, 0, 0, 0, 0, 0, 140, 38, -70, 0, 0, 0, 0, 0, 0, 105, 42, -100, 0, 0, 0, 0, 0, 0, 140, 46, -130, 0, 0, 0, 0, 0, 0, 240, 52, -130, 0, 0, 0, 0, 0, 0, 275, 56, -160, 0, 0, 0, 0, 0, 0, 240, 60, -190, 0, 0, 0, 0, 0, 0, 150, 64, -200, 0, 0, 0, 0, 0, 0, 40, 68, -240, 0, 0, 0, 0, 0, 0, -80, 70, -210, 0, 0, 0, 0, 0, 0, -180, 70, -250, 0, 0, 0, 0, 0, 0, -280, 68, -225, 0, 0, 0, 0, 0, 0, -340, 64, -160, 0, 0, 0, 0, 0, 0, -300, 62, -125, 0, 0, 0, 0, 0, 0, -210, 60, -140, 0, 0, 0, 0, 0, 0, -175, 56, -110, 0, 0, 0, 0, 0, 0, -210, 52, -80, 0, 0, 0, 0, 0, 0, -310, 48, -80, 0, 0, 0, 0, 0, 0, -345, 44, -50, 0, 0, 0, 0, 0, 0, -310, 40, -20, 0, 0, 0, 0, 0, 0, -210, 36, -20, 0, 0, 0, 0, 0, 0, -175, 32, 10, 0, 0, 0, 0, 0, 0, -210, 28, 40, 0, 0, 0, 0, 0, 0, -300, 24, 50, 0, 0, 0, 0, 0, 0, -330, 18, 130, 0, 0, 0, 0, 0, 0, -250, 12, 220, 0, 0, 0, 0, 0, 0, -120, 6, 250, 0, 0, 0, 0, 0, 0, -50, 2, 240),
-"tilts": PackedFloat32Array(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
-}
-point_count = 34
-
-[node name="Snow" type="Node3D"]
+[node name="Snow" type="Node3D" unique_id=15523964]
 script = ExtResource("1_gen")
 biome = 2
 map_seed = 11
+road_points = PackedVector3Array(0, 200, 0, 0, 100, 2, 40, 30, 5, 140, 0, 9, 240, -10, 12, 275, -40, 14, 240, -70, 16, 140, -70, 19, 105, -100, 21, 140, -130, 23, 240, -130, 26, 275, -160, 28, 240, -190, 30, 150, -200, 32, 40, -240, 34, -80, -210, 35, -180, -250, 35, -280, -225, 34, -340, -160, 32, -300, -125, 31, -210, -140, 30, -175, -110, 28, -210, -80, 26, -310, -80, 24, -345, -50, 22, -310, -20, 20, -210, -20, 18, -175, 10, 16, -210, 40, 14, -300, 50, 12, -330, 130, 9, -250, 220, 6, -120, 250, 3, -50, 240, 1)
 road_height_scale = 2.0
 road_width = 8.0
 verge_width = 1.0
 hill_height = 30.0
 mountain_height = 260.0
 snowfall = true
-road_points = PackedVector3Array(0, 200, 0, 0, 100, 2, 40, 30, 5, 140, 0, 9, 240, -10, 12, 275, -40, 14, 240, -70, 16, 140, -70, 19, 105, -100, 21, 140, -130, 23, 240, -130, 26, 275, -160, 28, 240, -190, 30, 150, -200, 32, 40, -240, 34, -80, -210, 35, -180, -250, 35, -280, -225, 34, -340, -160, 32, -300, -125, 31, -210, -140, 30, -175, -110, 28, -210, -80, 26, -310, -80, 24, -345, -50, 22, -310, -20, 20, -210, -20, 18, -175, 10, 16, -210, 40, 14, -300, 50, 12, -330, 130, 9, -250, 220, 6, -120, 250, 3, -50, 240, 1)
 
-[node name="RoadPath" type="Path3D" parent="."]
+[node name="RoadPath" type="Path3D" parent="." unique_id=1542961523]
 curve = SubResource("RoadCurve")
 
-[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+[node name="WorldEnvironment" type="WorldEnvironment" parent="." unique_id=379704051]
 environment = SubResource("Env")
 
-[node name="Sun" type="DirectionalLight3D" parent="."]
-transform = Transform3D(-0.6, 0.15264720, -0.78530174, 0, 0.98162723, 0.19080900, 0.8, 0.11448541, -0.58897632, 0, 20, 0)
+[node name="Sun" type="DirectionalLight3D" parent="." unique_id=700799553]
+transform = Transform3D(-0.6, 0.1526472, -0.78530174, 0, 0.9816272, 0.190809, 0.8, 0.11448541, -0.5889763, 0, 20, 0)
 light_color = Color(1, 0.62, 0.55, 1)
 light_energy = 1.4
 shadow_enabled = true
@@ -85,11 +86,12 @@ shadow_blur = 1.169
 directional_shadow_fade_start = 0.738
 directional_shadow_max_distance = 150.0
 
-[node name="Car" parent="." instance=ExtResource("2_car")]
+[node name="Car" parent="." unique_id=1983012405 instance=ExtResource("2_car")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 37.73128, 0)
 
-[node name="PostFX" type="CanvasLayer" parent="."]
+[node name="PostFX" type="CanvasLayer" parent="." unique_id=1260441818]
 
-[node name="Filter" type="ColorRect" parent="PostFX"]
+[node name="Filter" type="ColorRect" parent="PostFX" unique_id=1471287484]
 material = SubResource("PostFXMat")
 anchors_preset = 15
 anchor_right = 1.0

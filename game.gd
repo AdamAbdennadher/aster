@@ -14,6 +14,7 @@ const MAPS := [
 	{"name": "MOUNTAIN", "scene": "res://mountain.tscn"},
 	{"name": "DESERT", "scene": "res://desert.tscn"},
 	{"name": "SNOW", "scene": "res://snow.tscn"},
+	{"name": "TRAINING", "scene": "res://training.tscn"},
 ]
 
 signal state_changed(state: State)

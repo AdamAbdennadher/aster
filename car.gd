@@ -50,6 +50,11 @@ const CAM_ROTATE_SPEED = 5.0
 @export var bump_stop_margin := 0.015      ## the bump stop starts pushing this far below the wheel arch
 @export var bump_stop_strength := 500.0
 @export var bump_stop_damping := 20.0
+@export var bump_stop_max := 50.0          ## cap on the bump stop push (m/s2 per wheel): an uncapped push on landings can roll the car over
+
+@export_group("Air")
+@export var air_roll_damping := 4.0      ## in the air, how fast sideways rotation dies down (avoids barrel rolls off jumps)
+@export var air_roll_leveling := 3.0     ## in the air, how strongly the car rolls back to level
 
 @export_group("Game over")
 @export var flip_tilt := 0.35             ## car up-vector dot world-up below this counts as flipped (~70 deg)
@@ -145,6 +150,8 @@ func _physics_process(delta: float) -> void:
 	last_speed = speed
 
 	_apply_bump_stops()
+	if not is_on_ground():
+		_stabilize_in_air(delta)
 	if playing:
 		_check_flipped(delta)
 	update_camera(delta)
@@ -182,8 +189,21 @@ func _apply_bump_stops() -> void:
 			continue
 		var offset := center - global_position
 		var closing := -(linear_velocity + angular_velocity.cross(offset)).dot(up)
-		var push := bump_stop_strength * depth + bump_stop_damping * maxf(closing, 0.0)
+		var push := minf(bump_stop_strength * depth + bump_stop_damping * maxf(closing, 0.0), bump_stop_max)
 		apply_force(up * push * mass, offset)
+
+
+# Arcade air control: damp the roll (rotation around the car's length) and ease it back to level, so a
+# slightly uneven take-off does not turn into a barrel roll. Pitch is left alone so jumps keep their arc.
+func _stabilize_in_air(delta: float) -> void:
+	var forward := global_basis.z
+	var roll_rate := angular_velocity.dot(forward)
+	# signed roll angle: how far the car's up vector leans sideways, measured around its forward axis
+	var flat_up := (Vector3.UP - forward * Vector3.UP.dot(forward)).normalized()
+	var roll_angle := global_basis.y.signed_angle_to(flat_up, forward)
+	var wanted_rate := roll_angle * air_roll_leveling
+	var change := (wanted_rate - roll_rate) * clampf(air_roll_damping * delta, 0.0, 1.0)
+	apply_torque_impulse(get_inverse_inertia_tensor().inverse() * (forward * change))
 
 
 # Godot's raycast suspension draws the wheel lower than its real contact, more so as the spring compresses,
