@@ -6,14 +6,13 @@ extends Node3D
 @export var full_smoke_angle_deg := 30.0  ## slip angle at which smoke and marks are at full strength
 
 @export_group("Smoke")
-## Cartoon puffs: solid round blobs with a crisp edge and two-tone shading, they swell up then shrink away
-@export var smoke_amount := 90
-@export var smoke_lifetime := 1.8
-@export var smoke_color := Color(0.62, 0.62, 0.64, 0.95)
-@export var smoke_shadow_color := Color(0.72, 0.72, 0.76)  ## shaded side of the puffs (multiplies smoke_color)
-@export var smoke_size := 0.7
-@export var smoke_growth := 1.5         ## biggest size of a puff (multiplier), reached around mid-life
-@export var smoke_rise := 0.6
+## Grey, see-through, wispy smoke: dense continuous trail that spreads out and frays away
+@export var smoke_amount := 320
+@export var smoke_lifetime := 3.0
+@export var smoke_color := Color(0.72, 0.72, 0.74, 0.4)
+@export var smoke_size := 1.1
+@export var smoke_growth := 3.0          ## size multiplier reached at the end of a puff's life
+@export var smoke_rise := 0.35
 
 @export_group("Skid marks")
 @export var skid_width := 0.22
@@ -89,77 +88,91 @@ func _add_mark(from: Vector3, to: Vector3, normal: Vector3) -> void:
 
 
 func _create_smoke() -> GPUParticles3D:
-	# Billboarded disc with a hard edge, lit from the top left in two flat tones (no soft gradient)
+	# Soft billboard whose edge is broken up by noise. As the puff ages, more of it falls under the noise
+	# threshold, so it frays into wisps instead of just fading. Lit, so it takes the color of the sunset.
 	var shader := Shader.new()
 	shader.code = """
 shader_type spatial;
-render_mode unshaded, cull_disabled;
-uniform vec3 shadow_color : source_color = vec3(0.74, 0.6, 0.72);
+render_mode depth_draw_never, cull_disabled, shadows_disabled, diffuse_lambert_wrap, specular_disabled;
+uniform sampler2D noise_tex : repeat_enable, filter_linear;
+varying float life;
+varying vec2 noise_offset;
 
 void vertex() {
-	// face the camera, keep the particle's scale
+	// face the camera, spin by the particle angle, keep the particle scale
+	float a = INSTANCE_CUSTOM.x;
 	mat4 world = mat4(normalize(INV_VIEW_MATRIX[0]), normalize(INV_VIEW_MATRIX[1]), normalize(INV_VIEW_MATRIX[2]), MODEL_MATRIX[3]);
+	world = world * mat4(vec4(cos(a), -sin(a), 0.0, 0.0), vec4(sin(a), cos(a), 0.0, 0.0), vec4(0.0, 0.0, 1.0, 0.0), vec4(0.0, 0.0, 0.0, 1.0));
 	world = world * mat4(vec4(length(MODEL_MATRIX[0].xyz), 0.0, 0.0, 0.0), vec4(0.0, length(MODEL_MATRIX[1].xyz), 0.0, 0.0),
 		vec4(0.0, 0.0, length(MODEL_MATRIX[2].xyz), 0.0), vec4(0.0, 0.0, 0.0, 1.0));
 	MODELVIEW_MATRIX = VIEW_MATRIX * world;
 	MODELVIEW_NORMAL_MATRIX = mat3(MODELVIEW_MATRIX);
+	life = INSTANCE_CUSTOM.y;
+	noise_offset = vec2(fract(a * 7.31), fract(a * 3.17));   // each puff samples its own part of the noise
 }
 
 void fragment() {
 	vec2 p = UV * 2.0 - 1.0;
-	float d = length(p);
-	if (d > 1.0) {
-		discard;
-	}
-	// fake sphere normal, then a single light/shadow step
-	vec3 n = vec3(p.x, -p.y, sqrt(1.0 - d * d));
-	float lit = step(0.2, dot(n, normalize(vec3(-0.55, 0.65, 0.5))));
-	ALBEDO = mix(shadow_color * COLOR.rgb, COLOR.rgb, lit);
-	ALPHA = COLOR.a;
+	float falloff = 1.0 - smoothstep(0.15, 1.0, length(p));
+	float n = texture(noise_tex, UV * 0.7 + noise_offset + vec2(life * 0.15, -life * 0.1)).r;
+	float density = falloff * (0.45 + n);
+	// threshold rises with age: the puff thins out and breaks into wisps
+	float cut = mix(0.15, 0.85, life);
+	ALBEDO = COLOR.rgb;
+	ALPHA = COLOR.a * smoothstep(cut, cut + 0.35, density);
 }
 """
+	var noise := FastNoiseLite.new()
+	noise.frequency = 0.02
+	noise.fractal_octaves = 4
+	var noise_tex := NoiseTexture2D.new()
+	noise_tex.width = 128
+	noise_tex.height = 128
+	noise_tex.seamless = true
+	noise_tex.noise = noise
 	var draw_mat := ShaderMaterial.new()
 	draw_mat.shader = shader
-	draw_mat.set_shader_parameter("shadow_color", smoke_shadow_color)
+	draw_mat.set_shader_parameter("noise_tex", noise_tex)
 
 	var quad := QuadMesh.new()
 	quad.size = Vector2.ONE * smoke_size
 	quad.material = draw_mat
 
-	# stays nearly opaque: puffs disappear by shrinking, the cartoon way, not by fading out
 	var fade := Gradient.new()
-	fade.offsets = PackedFloat32Array([0.0, 0.85, 1.0])
-	fade.colors = PackedColorArray([Color(1, 1, 1, 1), Color(1, 1, 1, 1), Color(1, 1, 1, 0)])
+	fade.offsets = PackedFloat32Array([0.0, 0.06, 0.5, 1.0])
+	fade.colors = PackedColorArray([Color(1, 1, 1, 0), Color(1, 1, 1, 1), Color(1, 1, 1, 0.65), Color(1, 1, 1, 0)])
 	var fade_tex := GradientTexture1D.new()
 	fade_tex.gradient = fade
 
-	# pop out quickly, swell, then shrink to nothing
 	var grow := Curve.new()
 	grow.max_value = smoke_growth
-	grow.add_point(Vector2(0, 0.35))
-	grow.add_point(Vector2(0.12, smoke_growth * 0.75))
-	grow.add_point(Vector2(0.5, smoke_growth))
-	grow.add_point(Vector2(1, 0.0))
+	grow.add_point(Vector2(0, 0.5))
+	grow.add_point(Vector2(0.35, smoke_growth * 0.65))
+	grow.add_point(Vector2(1, smoke_growth))
 	var grow_tex := CurveTexture.new()
 	grow_tex.curve = grow
 
 	var process := ParticleProcessMaterial.new()
 	process.emission_shape = ParticleProcessMaterial.EMISSION_SHAPE_SPHERE
-	process.emission_sphere_radius = 0.3
+	process.emission_sphere_radius = 0.2
 	process.direction = Vector3.UP
-	process.spread = 70.0
-	process.initial_velocity_min = 1.0
-	process.initial_velocity_max = 2.5
+	process.spread = 60.0
+	process.initial_velocity_min = 0.5
+	process.initial_velocity_max = 1.5
 	process.gravity = Vector3(0, smoke_rise, 0)
-	# High damping makes puffs stop quickly and hang in the air, so they line up behind the car
-	process.damping_min = 3.0
-	process.damping_max = 4.0
-	process.inherit_velocity_ratio = 0.1
-	process.scale_min = 0.7
-	process.scale_max = 1.3
+	# puffs slow down quickly and hang behind the car, then drift and spread
+	process.damping_min = 1.5
+	process.damping_max = 2.5
+	process.inherit_velocity_ratio = 0.2
+	process.scale_min = 0.8
+	process.scale_max = 1.2
 	process.scale_curve = grow_tex
 	process.color = smoke_color
 	process.color_ramp = fade_tex
+	process.angle_min = -180.0
+	process.angle_max = 180.0
+	process.angular_velocity_min = -25.0
+	process.angular_velocity_max = 25.0
 
 	var smoke := GPUParticles3D.new()
 	smoke.top_level = true
@@ -167,6 +180,7 @@ void fragment() {
 	smoke.lifetime = smoke_lifetime
 	smoke.local_coords = false
 	smoke.emitting = false
+	smoke.interpolate = true   # spread the puffs along the path between frames: a continuous trail, not dots
 	smoke.process_material = process
 	smoke.draw_pass_1 = quad
 	smoke.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
