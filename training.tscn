@@ -153,16 +153,16 @@ shader_parameter/vignette = 0.35
 shader_parameter/tint = Color(1, 0.96, 0.92, 1)
 shader_parameter/pixel_rows = 360.0
 
-[sub_resource type="StandardMaterial3D" id="TrainingMat"]
-albedo_color = Color(0.23, 0.21, 0.28, 1)
-roughness = 0.85
-
 [sub_resource type="BoxMesh" id="TableRampMesh"]
 material = SubResource("OrangeMat")
 size = Vector3(10, 0.5, 10.3)
 
 [sub_resource type="BoxShape3D" id="TableRampShape"]
 size = Vector3(10, 0.5, 10.3)
+
+[sub_resource type="StandardMaterial3D" id="TrainingMat"]
+albedo_color = Color(0.32542956, 0.12191018, 0.36355364, 1)
+roughness = 0.85
 
 [sub_resource type="BoxMesh" id="TableTopMesh"]
 material = SubResource("TrainingMat")
@@ -187,8 +187,8 @@ size = Vector3(14, 6, 30)
 
 [sub_resource type="CylinderMesh" id="WaveMesh"]
 material = SubResource("OrangeMat")
-top_radius = 4.0
-bottom_radius = 4.0
+top_radius = 3.2319336
+bottom_radius = 3.2319336
 height = 10.0
 radial_segments = 32
 
@@ -456,69 +456,76 @@ grow_horizontal = 2
 grow_vertical = 2
 mouse_filter = 2
 
-[node name="Verticality" type="Node3D" parent="."]
+[node name="Verticality" type="Node3D" parent="." unique_id=266906074]
 
-[node name="Tabletop" type="Node3D" parent="Verticality"]
+[node name="Tabletop" type="Node3D" parent="Verticality" unique_id=1987600031]
 
-[node name="RampUp" type="StaticBody3D" parent="Verticality/Tabletop"]
+[node name="RampUp" type="StaticBody3D" parent="Verticality/Tabletop" unique_id=1534386193]
 transform = Transform3D(1, 0, 0, 0, 0.9703, -0.2419, 0, 0.2419, 0.9703, 0, 1, -80.06)
 
-[node name="Mesh" type="MeshInstance3D" parent="Verticality/Tabletop/RampUp"]
+[node name="Mesh" type="MeshInstance3D" parent="Verticality/Tabletop/RampUp" unique_id=323189424]
 mesh = SubResource("TableRampMesh")
 
-[node name="Shape" type="CollisionShape3D" parent="Verticality/Tabletop/RampUp"]
+[node name="Shape" type="CollisionShape3D" parent="Verticality/Tabletop/RampUp" unique_id=674206475]
 shape = SubResource("TableRampShape")
 
-[node name="Top" type="StaticBody3D" parent="Verticality/Tabletop"]
+[node name="Top" type="StaticBody3D" parent="Verticality/Tabletop" unique_id=388207483]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.25, -91)
 
-[node name="Mesh" type="MeshInstance3D" parent="Verticality/Tabletop/Top"]
+[node name="Mesh" type="MeshInstance3D" parent="Verticality/Tabletop/Top" unique_id=1658009556]
 mesh = SubResource("TableTopMesh")
 
-[node name="Shape" type="CollisionShape3D" parent="Verticality/Tabletop/Top"]
+[node name="Shape" type="CollisionShape3D" parent="Verticality/Tabletop/Top" unique_id=1390998514]
 shape = SubResource("TableTopShape")
 
-[node name="RampDown" type="StaticBody3D" parent="Verticality/Tabletop"]
+[node name="RampDown" type="StaticBody3D" parent="Verticality/Tabletop" unique_id=684324810]
 transform = Transform3D(1, 0, 0, 0, 0.9703, 0.2419, 0, -0.2419, 0.9703, 0, 1, -101.94)
 
-[node name="Mesh" type="MeshInstance3D" parent="Verticality/Tabletop/RampDown"]
+[node name="Mesh" type="MeshInstance3D" parent="Verticality/Tabletop/RampDown" unique_id=229821598]
 mesh = SubResource("TableRampMesh")
 
-[node name="Shape" type="CollisionShape3D" parent="Verticality/Tabletop/RampDown"]
+[node name="Shape" type="CollisionShape3D" parent="Verticality/Tabletop/RampDown" unique_id=1962693459]
 shape = SubResource("TableRampShape")
 
-[node name="Platform" type="Node3D" parent="Verticality"]
+[node name="Platform" type="Node3D" parent="Verticality" unique_id=2134156914]
 
-[node name="Ramp" type="StaticBody3D" parent="Verticality/Platform"]
+[node name="Ramp" type="StaticBody3D" parent="Verticality/Platform" unique_id=1875831798]
 transform = Transform3D(1, 0, 0, 0, 0.9781, 0.2079, 0, -0.2079, 0.9781, 90, 2.526, 54.3)
 
-[node name="Mesh" type="MeshInstance3D" parent="Verticality/Platform/Ramp"]
+[node name="Mesh" type="MeshInstance3D" parent="Verticality/Platform/Ramp" unique_id=713814264]
 mesh = SubResource("PlatformRampMesh")
 
-[node name="Shape" type="CollisionShape3D" parent="Verticality/Platform/Ramp"]
+[node name="Shape" type="CollisionShape3D" parent="Verticality/Platform/Ramp" unique_id=509966301]
 shape = SubResource("PlatformRampShape")
 
-[node name="Top" type="StaticBody3D" parent="Verticality/Platform"]
+[node name="Top" type="StaticBody3D" parent="Verticality/Platform" unique_id=351533267]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 90, 3, 83.4)
 
-[node name="Mesh" type="MeshInstance3D" parent="Verticality/Platform/Top"]
+[node name="Mesh" type="MeshInstance3D" parent="Verticality/Platform/Top" unique_id=331068030]
 mesh = SubResource("PlatformMesh")
 
-[node name="Shape" type="CollisionShape3D" parent="Verticality/Platform/Top"]
+[node name="Shape" type="CollisionShape3D" parent="Verticality/Platform/Top" unique_id=389029751]
 shape = SubResource("PlatformShape")
 
-[node name="Bowl" type="CSGCombiner3D" parent="Verticality"]
+[node name="Landing" type="CSGPolygon3D" parent="Verticality/Platform" unique_id=228546633]
+transform = Transform3D(0, 0, -1, 0, 1, 0, 1, 0, 0, 83, 0, 100)
+use_collision = true
+polygon = PackedVector2Array(0, 0, 0, 4.5, 21.2, 0)
+depth = 14.0
+material = SubResource("OrangeMat")
+
+[node name="Bowl" type="CSGCombiner3D" parent="Verticality" unique_id=212907013]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -80, 0, -80)
 use_collision = true
 
-[node name="Outer" type="CSGCylinder3D" parent="Verticality/Bowl"]
+[node name="Outer" type="CSGCylinder3D" parent="Verticality/Bowl" unique_id=2066113908]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 3, 0)
 radius = 34.0
 height = 6.0
 sides = 48
 material = SubResource("TrainingMat")
 
-[node name="Hollow" type="CSGCylinder3D" parent="Verticality/Bowl"]
+[node name="Hollow" type="CSGCylinder3D" parent="Verticality/Bowl" unique_id=798194436]
 transform = Transform3D(1, 0, 0, 0, -1, 0, 0, 0, -1, 0, 0, 0)
 operation = 2
 radius = 30.0
@@ -527,62 +534,55 @@ sides = 48
 cone = true
 material = SubResource("TrainingMat")
 
-[node name="Entrance" type="CSGBox3D" parent="Verticality/Bowl"]
+[node name="Entrance" type="CSGBox3D" parent="Verticality/Bowl" unique_id=394347904]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 26.5, 3, 0)
 operation = 2
 size = Vector3(27, 10, 12)
 material = SubResource("TrainingMat")
 
-[node name="Waves" type="Node3D" parent="Verticality"]
+[node name="Waves" type="Node3D" parent="Verticality" unique_id=1376075179]
 
-[node name="Wave1" type="StaticBody3D" parent="Verticality/Waves"]
+[node name="Wave1" type="StaticBody3D" parent="Verticality/Waves" unique_id=399601602]
 transform = Transform3D(0, -1, 0, 1, 0, 0, 0, 0, 1, -90, -2.8, 10)
 
-[node name="Mesh" type="MeshInstance3D" parent="Verticality/Waves/Wave1"]
+[node name="Mesh" type="MeshInstance3D" parent="Verticality/Waves/Wave1" unique_id=2028548389]
 mesh = SubResource("WaveMesh")
 
-[node name="Shape" type="CollisionShape3D" parent="Verticality/Waves/Wave1"]
+[node name="Shape" type="CollisionShape3D" parent="Verticality/Waves/Wave1" unique_id=654357112]
 shape = SubResource("WaveShape")
 
-[node name="Wave2" type="StaticBody3D" parent="Verticality/Waves"]
+[node name="Wave2" type="StaticBody3D" parent="Verticality/Waves" unique_id=167929273]
 transform = Transform3D(0, -1, 0, 1, 0, 0, 0, 0, 1, -90, -2.8, 20)
 
-[node name="Mesh" type="MeshInstance3D" parent="Verticality/Waves/Wave2"]
+[node name="Mesh" type="MeshInstance3D" parent="Verticality/Waves/Wave2" unique_id=1251652076]
 mesh = SubResource("WaveMesh")
 
-[node name="Shape" type="CollisionShape3D" parent="Verticality/Waves/Wave2"]
+[node name="Shape" type="CollisionShape3D" parent="Verticality/Waves/Wave2" unique_id=1451337559]
 shape = SubResource("WaveShape")
 
-[node name="Wave3" type="StaticBody3D" parent="Verticality/Waves"]
+[node name="Wave3" type="StaticBody3D" parent="Verticality/Waves" unique_id=588630285]
 transform = Transform3D(0, -1, 0, 1, 0, 0, 0, 0, 1, -90, -2.8, 30)
 
-[node name="Mesh" type="MeshInstance3D" parent="Verticality/Waves/Wave3"]
+[node name="Mesh" type="MeshInstance3D" parent="Verticality/Waves/Wave3" unique_id=1203950663]
 mesh = SubResource("WaveMesh")
 
-[node name="Shape" type="CollisionShape3D" parent="Verticality/Waves/Wave3"]
+[node name="Shape" type="CollisionShape3D" parent="Verticality/Waves/Wave3" unique_id=1689260894]
 shape = SubResource("WaveShape")
 
-[node name="Wave4" type="StaticBody3D" parent="Verticality/Waves"]
+[node name="Wave4" type="StaticBody3D" parent="Verticality/Waves" unique_id=44213151]
 transform = Transform3D(0, -1, 0, 1, 0, 0, 0, 0, 1, -90, -2.8, 40)
 
-[node name="Mesh" type="MeshInstance3D" parent="Verticality/Waves/Wave4"]
+[node name="Mesh" type="MeshInstance3D" parent="Verticality/Waves/Wave4" unique_id=1131853042]
 mesh = SubResource("WaveMesh")
 
-[node name="Shape" type="CollisionShape3D" parent="Verticality/Waves/Wave4"]
+[node name="Shape" type="CollisionShape3D" parent="Verticality/Waves/Wave4" unique_id=1074639071]
 shape = SubResource("WaveShape")
 
-[node name="Wave5" type="StaticBody3D" parent="Verticality/Waves"]
+[node name="Wave5" type="StaticBody3D" parent="Verticality/Waves" unique_id=686618362]
 transform = Transform3D(0, -1, 0, 1, 0, 0, 0, 0, 1, -90, -2.8, 50)
 
-[node name="Mesh" type="MeshInstance3D" parent="Verticality/Waves/Wave5"]
+[node name="Mesh" type="MeshInstance3D" parent="Verticality/Waves/Wave5" unique_id=851525217]
 mesh = SubResource("WaveMesh")
 
-[node name="Shape" type="CollisionShape3D" parent="Verticality/Waves/Wave5"]
+[node name="Shape" type="CollisionShape3D" parent="Verticality/Waves/Wave5" unique_id=1309026304]
 shape = SubResource("WaveShape")
-
-[node name="Landing" type="CSGPolygon3D" parent="Verticality/Platform"]
-transform = Transform3D(0, 0, -1, 0, 1, 0, 1, 0, 0, 83, 0, 100)
-use_collision = true
-polygon = PackedVector2Array(0, 0, 0, 4.5, 21.2, 0)
-depth = 14.0
-material = SubResource("OrangeMat")

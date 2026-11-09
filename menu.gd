@@ -113,14 +113,31 @@ func _build_ui() -> void:
 	buttons.add_child(quit)
 	_play = _centered(panel, buttons, 200)
 
+	# new version on GitHub: small button under the menu, then the download progress in its place
+	var update := NeonButton.new()
+	update.text_size = 11
+	update.rest_alpha = 0.6
+	update.visible = false
+	buttons.add_child(update)
+	var show_update := func(version: String):
+		update.text = "update to v" + version
+		update.visible = true
+	Updater.update_available.connect(show_update)
+	if Updater.latest_version != "":
+		show_update.call(Updater.latest_version)
+	update.pressed.connect(Updater.start_update)
+	Updater.progress_changed.connect(func(text: String):
+		update.text = text
+		update.disabled = true)
+
 	var list := VBoxContainer.new()
-	list.add_theme_constant_override("separation", 14)
+	list.add_theme_constant_override("separation", 4)
 	for m in Game.MAPS:
 		var entry := VBoxContainer.new()
 		entry.add_theme_constant_override("separation", 0)
 		var b := NeonButton.new()
 		b.text = m.name.to_lower()
-		b.text_size = 18
+		b.text_size = 16
 		b.pressed.connect(Game.play_map.bind(m.scene))
 		entry.add_child(b)
 		# personal best under the name
@@ -132,14 +149,14 @@ func _build_ui() -> void:
 			best_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 			entry.add_child(best_label)
 		list.add_child(entry)
-	_maps = _centered(panel, list, 120)
+	_maps = _centered(panel, list, 88)
 
 	var back := NeonButton.new()
 	back.text = "back"
 	back.text_size = 11
 	back.rest_alpha = 0.4
 	back.pressed.connect(_show_title)
-	_back = _centered(panel, back, 312)
+	_back = _centered(panel, back, 326)
 
 	for c in [_maps, _back]:
 		c.modulate.a = 0.0

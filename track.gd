@@ -3,7 +3,7 @@ extends Node3D
 ## Procedural track: terrain, road with markings, guardrails on tight corners, props (trees, cacti, rocks),
 ## optional sea and snowfall. Everything is rebuilt on load (and in the editor), nothing generated is saved.
 
-enum Biome { MOUNTAIN, DESERT, SNOW }
+enum Biome { MOUNTAIN, DESERT, SNOW, JUNGLE }
 enum Surface { ASPHALT, DIRT }
 
 @export var regenerate := false:
@@ -34,6 +34,9 @@ enum Surface { ASPHALT, DIRT }
 @export var spawn_sample := 5             ## where the car starts along the road (1 sample = 2 m)
 @export var spawn_height := 0.68           ## car body height above the road at spawn (it rests at about 0.65, so it barely drops)
 @export var finish_offset := 15            ## the finish line is this many samples ahead of the spawn (1 sample = 2 m)
+## Road surface by stretch: each entry is (from road point, to road point, type) with type 1 = dirt, 2 = sand.
+## Everything else is the map surface. Bridges get wooden planks automatically.
+@export var surface_sections := PackedVector3Array()
 
 @export_group("Terrain")
 @export var map_size := 1400.0
@@ -51,6 +54,17 @@ enum Surface { ASPHALT, DIRT }
 @export var water_shallow_color := Color(0.2, 0.95, 0.85)
 @export var water_deep_color := Color(0.0, 0.48, 0.72)
 @export var water_depth_range := 7.0          ## meters over which the water goes from shallow to deep color
+
+@export_group("Ponds")
+@export var ponds_enabled := false
+@export var pond_count := 14
+@export var pond_radius := Vector2(12, 28)   ## min / max radius in meters
+@export var pond_depth := 3.0
+## A big lake at a fixed spot (0 = none). Roads crossing it become bridges.
+@export var lake_radius := 0.0
+@export var lake_center := Vector2.ZERO
+@export var lake_level := 1.0
+@export var lake_depth := 6.0
 
 @export_group("Weather")
 @export var snowfall := false
@@ -73,6 +87,9 @@ var _nearest_index := 0
 var _generated: Node3D
 var _snow: GPUParticles3D
 var _regen_at := -1.0
+var _ponds: Array = []        # {c: Vector2 center, r: radius, level: water height}
+var _bridge := PackedByteArray()  # per road sample: 1 where the road runs over water (bridge deck, with a few samples of margin)
+var _lake_noise: FastNoiseLite
 
 
 func _ready() -> void:
@@ -112,6 +129,13 @@ func _physics_process(_delta: float) -> void:
 		var car := get_node_or_null("Car/Car")
 		if car and car.global_position.y < sea_level - 1.5:
 			car.reset_car()
+	if not _ponds.is_empty():
+		var car := get_node_or_null("Car/Car")
+		if car:
+			var p := Vector2(car.global_position.x, car.global_position.z)
+			for pond in _ponds:
+				if p.distance_to(pond.c) < pond.r and car.global_position.y < pond.level - 1.2:
+					car.reset_car()
 	if _snow:
 		var cam := get_viewport().get_camera_3d()
 		if cam:
@@ -131,10 +155,13 @@ func generate() -> void:
 	_build_terrain()
 	_build_road_mesh()
 	_build_guardrails()
+	_build_bridges()
 	_build_finish_line()
 	_build_props()
 	if sea_enabled:
 		_build_sea()
+	if not _ponds.is_empty():
+		_build_ponds_water()
 	if snowfall:
 		_build_snowfall()
 
@@ -149,6 +176,13 @@ func _palette() -> Dictionary:
 				"steep": Color(0.52, 0.27, 0.17), "verge": Color(0.58, 0.42, 0.28),
 				"beach": Color(0.86, 0.72, 0.5), "road_verge": Color(0.6, 0.45, 0.3),
 				"asphalt": Color(0.13, 0.11, 0.11),
+			}
+		Biome.JUNGLE:
+			return {
+				"ground": Color(0.05, 0.12, 0.04), "ground_alt": Color(0.1, 0.17, 0.05),
+				"steep": Color(0.17, 0.13, 0.09), "verge": Color(0.33, 0.16, 0.09),
+				"beach": Color(0.38, 0.3, 0.19), "road_verge": Color(0.24, 0.17, 0.1),
+				"asphalt": Color(0.11, 0.11, 0.12),
 			}
 		Biome.SNOW:
 			return {
@@ -173,6 +207,14 @@ func _props() -> Array:
 			return [
 				{"mesh": _cactus_mesh(), "count": 900, "road_gap": 5.0, "radius": 0.4, "scale": Vector2(0.7, 1.4), "sink": 0.2},
 				{"mesh": _rock_mesh(Color(0.5, 0.28, 0.18)), "count": 700, "road_gap": 4.0, "radius": 1.0, "scale": Vector2(0.4, 2.5), "sink": 0.4},
+			]
+		Biome.JUNGLE:
+			return [
+				{"mesh": _jungle_tree_mesh(), "count": 10000, "road_gap": 5.0, "radius": 0.45, "scale": Vector2(0.7, 1.5), "sink": 0.3},
+				{"mesh": _palm_mesh(), "count": 4000, "road_gap": 4.0, "radius": 0.3, "scale": Vector2(0.8, 1.3), "sink": 0.2},
+				{"mesh": _bush_mesh(), "count": 9000, "road_gap": 3.5, "radius": 0.0, "scale": Vector2(0.6, 1.6), "sink": 0.3},
+				{"mesh": _fern_mesh(), "count": 14000, "road_gap": 2.5, "radius": 0.0, "scale": Vector2(0.6, 1.5), "sink": 0.05},
+				{"mesh": _rock_mesh(Color(0.25, 0.3, 0.22)), "count": 300, "road_gap": 4.0, "radius": 1.0, "scale": Vector2(0.5, 2.2), "sink": 0.5},
 			]
 		Biome.SNOW:
 			return [
@@ -355,6 +397,13 @@ func _build_terrain() -> void:
 				var shore := _shore_distance(x, z)
 				nat = lerpf(nat, sea_level - 1.5, smoothstep(-45.0, 0.0, shore))
 				nat = lerpf(nat, sea_level - 25.0, smoothstep(60.0, 160.0, shore))
+			if lake_radius > 0.0:
+				# flat shore 1 m above the lake all around it, easing back into the hills further out (the road is laid
+				# over this, the water itself is dug in _carve_ponds, also under the road where it becomes a bridge)
+				var dl := Vector2(x, z).distance_to(lake_center)
+				var rl := _lake_r(Vector2(x, z))
+				if dl < rl * 1.4:
+					nat = lerpf(lake_level + 1.0, maxf(nat, lake_level + 1.0), smoothstep(rl, rl * 1.4, dl))
 
 			_find_nearest(x, z)
 			var h := nat
@@ -364,6 +413,11 @@ func _build_terrain() -> void:
 				h = lerpf(samples[_nearest_index].y - 0.35, nat, blend)
 			_heights[iz * n + ix] = h
 			near_road[iz * n + ix] = _nearest_dist
+
+	_ponds.clear()
+	if ponds_enabled or lake_radius > 0.0:
+		_place_ponds()
+		_carve_ponds()
 
 	var pal := _palette()
 	var verts := PackedVector3Array()
@@ -388,6 +442,7 @@ func _build_terrain() -> void:
 			c = c.lerp(pal.steep, smoothstep(0.75, 0.55, normal.y))
 			if sea_enabled:
 				c = c.lerp(pal.beach, 1.0 - smoothstep(sea_level + 1.0, sea_level + 4.0, _heights[i]))
+			c = c.lerp(pal.beach, _pond_bank(x, z, _heights[i]))
 			c = c.lerp(pal.verge, 1.0 - smoothstep(road_half, road_half + 6.0, near_road[i]))
 			colors[i] = c
 
@@ -439,24 +494,36 @@ func _build_road_mesh() -> void:
 	var shoulder := [1.0, 2.0, 3.0]
 	var lateral := [-half - 3.8]
 	var drop := [-1.2]
+	# on a bridge the shoulders fold under the deck edge instead: it gets a straight side, like a beam
+	var deck_drop := [-1.1]
 	for k in range(shoulder.size() - 1, -1, -1):
 		lateral.append(-half - shoulder[k])
 		drop.append(_shoulder_drop(shoulder[k] / shoulder[-1]))
+		deck_drop.append(-0.3 * (k + 1))
 	lateral.append_array([-half, 0.0, half])
 	drop.append_array([0.0, 0.0, 0.0])
+	deck_drop.append_array([0.0, 0.0, 0.0])
 	for k in shoulder.size():
 		lateral.append(half + shoulder[k])
 		drop.append(_shoulder_drop(shoulder[k] / shoulder[-1]))
+		deck_drop.append(-0.3 * (k + 1))
 	lateral.append(half + 3.8)
 	drop.append(-1.2)
+	deck_drop.append(-1.1)
+	var weights := _surface_weights()
 	for i in count + 1:
 		var k := i % count
 		var c := samples[k]
 		var r := _right(k)
 		var dist: float = distances[k] if i < count else distances[count - 1] + SAMPLE_SPACING
+		var w: Color = weights[k]
 		for j in lateral.size():
-			st.set_uv(Vector2(clampf(lateral[j], -half, half), dist))
-			st.add_vertex(c + r * lateral[j] + Vector3.UP * drop[j])
+			var lat: float = lateral[j]
+			if absf(lat) > half:
+				lat = lerpf(lat, signf(lat) * (half + 0.3), w.b)
+			st.set_uv(Vector2(clampf(lat, -half, half), dist))
+			st.set_color(w)
+			st.add_vertex(c + r * lat + Vector3.UP * lerpf(drop[j], deck_drop[j], w.b))
 	var row := lateral.size()
 	for i in count:
 		for j in row - 1:
@@ -473,7 +540,6 @@ func _build_road_mesh() -> void:
 	var pal := _palette()
 	var mat := ShaderMaterial.new()
 	mat.shader = _road_shader()
-	mat.set_shader_parameter("dirt", surface == Surface.DIRT)
 	mat.set_shader_parameter("half_width", road_width * 0.5)
 	mat.set_shader_parameter("verge_color", pal.road_verge)
 	mat.set_shader_parameter("asphalt_color", pal.asphalt)
@@ -481,8 +547,66 @@ func _build_road_mesh() -> void:
 		mat.set_shader_parameter("dirt_color", Color(0.62, 0.45, 0.3))
 	elif biome == Biome.SNOW:
 		mat.set_shader_parameter("dirt_color", Color(0.55, 0.55, 0.6))
+	elif biome == Biome.JUNGLE:
+		mat.set_shader_parameter("dirt_color", Color(0.5, 0.25, 0.14))
 	mesh.surface_set_material(0, mat)
 	_add_static_mesh("Road", mesh)
+
+
+# Per road sample: r = dirt, g = sand, b = bridge planks (asphalt is what is left), with 16 m blends
+# between stretches. Also fills _bridge: the samples where the road runs over water.
+func _surface_weights() -> PackedColorArray:
+	var count := samples.size()
+	var dirt := PackedFloat32Array()
+	var sand := PackedFloat32Array()
+	dirt.resize(count)
+	sand.resize(count)
+	if surface == Surface.DIRT:
+		dirt.fill(1.0)
+	var pts := _control_points()
+	for sec in surface_sections:
+		var i := _nearest_sample(pts[int(sec.x) % pts.size()])
+		var to := _nearest_sample(pts[int(sec.y) % pts.size()])
+		for guard in count:
+			if int(sec.z) == 1:
+				dirt[i] = 1.0
+				sand[i] = 0.0
+			elif int(sec.z) == 2:
+				sand[i] = 1.0
+				dirt[i] = 0.0
+			if i == to:
+				break
+			i = (i + 1) % count
+
+	_bridge.resize(count)
+	_bridge.fill(0)
+	for i in count:
+		var s := samples[i]
+		if _terrain_height(s.x, s.z) < s.y - 1.5:
+			for o in range(-4, 5):
+				_bridge[(i + o + count) % count] = 1
+
+	var weights := PackedColorArray()
+	weights.resize(count)
+	const BLUR := 4
+	for i in count:
+		var d := 0.0
+		var sa := 0.0
+		var b := 0.0
+		for o in range(-BLUR, BLUR + 1):
+			var k := (i + o + count) % count
+			d += dirt[k]
+			sa += sand[k]
+			b += _bridge[k]
+		var n := 2.0 * BLUR + 1.0
+		b /= n
+		weights[i] = Color(d / n * (1.0 - b), sa / n * (1.0 - b), b)
+	return weights
+
+
+func _nearest_sample(p: Vector3) -> int:
+	_find_nearest(p.x, p.z)
+	return _nearest_index
 
 
 # 0 at the road edge, -0.45 m at the end of the shoulder, with a smooth (cosine) curve in between
@@ -495,8 +619,9 @@ func _road_shader() -> Shader:
 	shader.code = """
 shader_type spatial;
 
-uniform bool dirt = false;
 uniform float half_width = 4.5;
+uniform vec3 sand_color : source_color = vec3(0.78, 0.64, 0.42);
+uniform vec3 plank_color : source_color = vec3(0.36, 0.23, 0.13);
 uniform vec3 asphalt_color : source_color = vec3(0.12, 0.11, 0.13);
 uniform vec3 dirt_color : source_color = vec3(0.34, 0.25, 0.17);
 uniform vec3 verge_color : source_color = vec3(0.22, 0.19, 0.15);
@@ -510,30 +635,40 @@ float hash(vec2 p) {
 }
 
 void fragment() {
+	// COLOR (set per road sample): r = dirt, g = sand, b = bridge planks, the rest is asphalt
+	float w_dirt = COLOR.r;
+	float w_sand = COLOR.g;
+	float w_plank = COLOR.b;
 	float ax = abs(UV.x);
 	float grain = hash(floor(UV * 5.0));
-	vec3 col;
-	float line = 0.0;
-	vec3 lc = line_color;
-	if (dirt) {
-		col = dirt_color * (0.85 + 0.3 * grain);
-		// two darker wheel tracks
-		col *= 1.0 - 0.18 * smoothstep(0.7, 0.0, abs(ax - 1.7));
-	} else {
-		col = asphalt_color * (0.85 + 0.3 * grain);
-		float edge = step(half_width - 0.5, ax) * step(ax, half_width - 0.3);
-		float center = step(ax, 0.1) * step(fract(UV.y / (dash_length * 2.0)), 0.5);
-		line = max(edge, center);
-		if (center > 0.5) {
-			lc = center_color;
-		}
-	}
+
+	vec3 col = asphalt_color * (0.85 + 0.3 * grain);
+	float edge = step(half_width - 0.5, ax) * step(ax, half_width - 0.3);
+	float center = step(ax, 0.1) * step(fract(UV.y / (dash_length * 2.0)), 0.5);
+	float line = max(edge, center);
+	vec3 lc = center > 0.5 ? center_color : line_color;
+
+	// dirt track: two darker wheel ruts
+	vec3 dirt_col = dirt_color * (0.85 + 0.3 * grain) * (1.0 - 0.18 * smoothstep(0.7, 0.0, abs(ax - 1.7)));
+	// sand: pale, with soft ripples across the road and faint ruts
+	float ripple = sin(UV.y * 1.7 + sin(UV.x * 0.8) * 1.5) * 0.5 + 0.5;
+	vec3 sand_col = sand_color * (0.9 + 0.1 * grain) * (0.93 + 0.07 * ripple) * (1.0 - 0.1 * smoothstep(0.7, 0.0, abs(ax - 1.7)));
+	// planks across the deck, each a slightly different shade, with dark gaps
+	float plank = floor(UV.y / 0.7);
+	vec3 plank_col = plank_color * (0.75 + 0.35 * hash(vec2(plank, 3.1))) * mix(0.45, 1.0, step(0.1, fract(UV.y / 0.7)));
+
+	col = mix(col, dirt_col, w_dirt);
+	col = mix(col, sand_col, w_sand);
+	col = mix(col, plank_col, w_plank);
+	line *= 1.0 - clamp(w_dirt + w_sand + w_plank, 0.0, 1.0);
+
 	float verge = smoothstep(half_width, half_width + 0.2, ax);
-	col = mix(col, verge_color * (0.8 + 0.4 * grain), verge);
+	vec3 verge_col = mix(verge_color * (0.8 + 0.4 * grain), plank_color * 0.55, w_plank);
+	col = mix(col, verge_col, verge);
 	line *= 1.0 - verge;
 	ALBEDO = mix(col, lc, line);
 	EMISSION = lc * line * line_glow;
-	ROUGHNESS = dirt ? 0.95 : 0.8;
+	ROUGHNESS = mix(0.8, 0.95, clamp(w_dirt + w_sand + w_plank, 0.0, 1.0));
 }
 """
 	return shader
@@ -618,9 +753,14 @@ func _build_guardrails() -> void:
 	var flagged := PackedByteArray()
 	flagged.resize(count)
 	for i in count:
+		if _bridge[i]:
+			continue   # bridges have their own railings
 		if absf(curvature[i]) > guardrail_curvature:
 			for o in range(-12, 13):
 				flagged[(i + o + count) % count] = 1
+	for i in count:
+		if _bridge[i]:
+			flagged[i] = 0
 
 	var rail_st := SurfaceTool.new()
 	rail_st.begin(Mesh.PRIMITIVE_TRIANGLES)
@@ -705,6 +845,109 @@ func _build_guardrails() -> void:
 	_generated.add_child(post_instance)
 
 
+# Wooden railings on both sides of every bridge (with the same neon strip as the guardrails), pillars down
+# into the water and a cross beam under the deck every 10 m
+func _build_bridges() -> void:
+	var count := samples.size()
+	var first_land := _bridge.find(0)
+	if first_land < 0 or not _bridge.has(1):
+		return
+	var half := road_width * 0.5 + verge_width
+	var rail_st := SurfaceTool.new()
+	rail_st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var neon_st := SurfaceTool.new()
+	neon_st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var posts: Array[Transform3D] = []
+	var pillars: Array[Transform3D] = []
+	var beams: Array[Transform3D] = []
+	var body := StaticBody3D.new()
+	body.name = "BridgeCollision"
+	_generated.add_child(body)
+
+	var step := 0
+	while step < count:
+		if not _bridge[(first_land + step) % count]:
+			step += 1
+			continue
+		var run: Array[int] = []
+		while step < count and _bridge[(first_land + step) % count]:
+			run.append((first_land + step) % count)
+			step += 1
+		for side in [-1.0, 1.0]:
+			var points: Array[Vector3] = []
+			for k in run:
+				points.append(samples[k] + _right(k) * side * (half - 0.15))
+			_add_ribbon(rail_st, points, 0.45, 0.55)
+			_add_ribbon(rail_st, points, 0.9, 1.05)
+			_add_ribbon(neon_st, points, 1.06, 1.1)
+			for p in range(0, points.size(), 2):
+				posts.append(Transform3D(Basis(), points[p] + Vector3.UP * 0.55))
+			for p in range(0, points.size() - 2, 2):
+				var a := points[p]
+				var b := points[p + 2]
+				var shape := CollisionShape3D.new()
+				var box := BoxShape3D.new()
+				box.size = Vector3(0.3, 1.3, a.distance_to(b) + 0.1)
+				shape.shape = box
+				body.add_child(shape)
+				shape.global_transform = Transform3D(Basis.looking_at(b - a, Vector3.UP), (a + b) * 0.5 + Vector3.UP * 0.65)
+		for idx in range(2, run.size() - 2, 5):
+			var k := run[idx]
+			var s := samples[k]
+			var r := _right(k)
+			if _terrain_height(s.x, s.z) > s.y - 2.0:
+				continue   # still over the bank
+			beams.append(Transform3D(Basis(r, Vector3.UP, r.cross(Vector3.UP)), s + Vector3.UP * -1.2))
+			for side in [-1.0, 1.0]:
+				var p: Vector3 = s + r * side * (half - 0.6)
+				var ground := _terrain_height(p.x, p.z) - 0.5
+				var top := s.y - 1.2
+				pillars.append(Transform3D(Basis().scaled(Vector3(1.0, top - ground, 1.0)), Vector3(p.x, (top + ground) * 0.5, p.z)))
+
+	var wood := _flat_material(Color(0.3, 0.19, 0.11))
+	wood.cull_mode = BaseMaterial3D.CULL_DISABLED
+	var neon := StandardMaterial3D.new()
+	neon.albedo_color = Color(0.1, 0.9, 1.0)
+	neon.emission_enabled = true
+	neon.emission = Color(0.1, 0.9, 1.0)
+	neon.emission_energy_multiplier = 2.5
+	neon.cull_mode = BaseMaterial3D.CULL_DISABLED
+	rail_st.generate_normals()
+	neon_st.generate_normals()
+	var rail_mesh := rail_st.commit()
+	rail_mesh.surface_set_material(0, wood)
+	neon_st.commit(rail_mesh)
+	rail_mesh.surface_set_material(1, neon)
+	var rail := MeshInstance3D.new()
+	rail.name = "BridgeRails"
+	rail.mesh = rail_mesh
+	_generated.add_child(rail)
+
+	var post := BoxMesh.new()
+	post.size = Vector3(0.18, 1.1, 0.18)
+	var pillar := _cylinder(0.45, 0.45, 1.0, 8)
+	var beam := BoxMesh.new()
+	beam.size = Vector3(half * 2.0, 0.5, 0.7)
+	var dark_wood := _flat_material(Color(0.2, 0.13, 0.08))
+	var parts := [[post, posts, wood, "BridgePosts"], [pillar, pillars, dark_wood, "BridgePillars"], [beam, beams, dark_wood, "BridgeBeams"]]
+	for part in parts:
+		var list: Array[Transform3D] = part[1]
+		if list.is_empty():
+			continue
+		var mesh: PrimitiveMesh = part[0]
+		mesh.material = part[2]
+		var mm := MultiMesh.new()
+		mm.transform_format = MultiMesh.TRANSFORM_3D
+		mm.mesh = mesh
+		mm.instance_count = list.size()
+		for i in list.size():
+			mm.set_instance_transform(i, list[i])
+		var inst := MultiMeshInstance3D.new()
+		inst.name = part[3]
+		inst.multimesh = mm
+		_generated.add_child(inst)
+
+
 func _add_ribbon(st: SurfaceTool, points: Array[Vector3], bottom: float, top: float) -> void:
 	for k in points.size() - 1:
 		var a := points[k]
@@ -752,6 +995,8 @@ func _build_props() -> void:
 				continue
 			var h := _terrain_height(x, z)
 			if sea_enabled and h < sea_level + 1.5:
+				continue
+			if _in_pond(x, z, 1.15):
 				continue
 			var slope := absf(_terrain_height(x + 2.0, z) - h) + absf(_terrain_height(x, z + 2.0) - h)
 			if slope > 2.5:
@@ -825,6 +1070,95 @@ void fragment() {
 	return mesh
 
 
+func _jungle_tree_mesh() -> ArrayMesh:
+	var mesh := ArrayMesh.new()
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	# tall bare trunk with a wide, flat canopy made of three squashed blobs
+	for blob in [[Vector3(0, 10.5, 0), 3.2], [Vector3(1.7, 9.5, 0.9), 2.4], [Vector3(-1.4, 9.7, -1.2), 2.5]]:
+		var s := SphereMesh.new()
+		s.radius = blob[1]
+		s.height = blob[1] * 1.1
+		s.radial_segments = 7
+		s.rings = 3
+		st.append_from(s, 0, Transform3D(Basis(), blob[0]))
+	st.generate_normals()
+	st.commit(mesh)
+	_add_mesh_part(mesh, _cylinder(0.4, 0.22, 9.5, 6), Transform3D(Basis(), Vector3(0, 4.75, 0)))
+	mesh.surface_set_material(0, _flat_material(Color(0.07, 0.19, 0.07)))
+	mesh.surface_set_material(1, _flat_material(Color(0.25, 0.18, 0.12)))
+	return mesh
+
+
+func _palm_mesh() -> ArrayMesh:
+	var mesh := ArrayMesh.new()
+	# leaning, slightly curved trunk made of five segments
+	var trunk := SurfaceTool.new()
+	trunk.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var p := Vector3.ZERO
+	for i in 5:
+		var a := 0.08 + i * 0.07
+		var dir := Vector3(sin(a), cos(a), 0)
+		trunk.append_from(_cylinder(0.26 - i * 0.025, 0.24 - i * 0.025, 1.7, 6), 0,
+			Transform3D(Basis(Vector3.BACK, -a), p + dir * 0.85))
+		p += dir * 1.6
+	# seven fronds: a part going out and slightly up, then a part drooping down
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	for k in 7:
+		var yaw := k * TAU / 7.0
+		var b1 := Basis(Vector3.UP, yaw) * Basis(Vector3.BACK, 0.25)
+		var leaf1 := BoxMesh.new()
+		leaf1.size = Vector3(3.0, 0.08, 0.7)
+		st.append_from(leaf1, 0, Transform3D(b1, p + b1 * Vector3(1.5, 0, 0)))
+		var end1 := p + b1 * Vector3(3.0, 0, 0)
+		var b2 := Basis(Vector3.UP, yaw) * Basis(Vector3.BACK, -0.65)
+		var leaf2 := BoxMesh.new()
+		leaf2.size = Vector3(2.6, 0.06, 0.55)
+		st.append_from(leaf2, 0, Transform3D(b2, end1 + b2 * Vector3(1.3, 0, 0)))
+	st.generate_normals()
+	st.commit(mesh)
+	trunk.generate_normals()
+	trunk.commit(mesh)
+	mesh.surface_set_material(0, _flat_material(Color(0.12, 0.27, 0.08)))
+	mesh.surface_set_material(1, _flat_material(Color(0.36, 0.27, 0.18)))
+	return mesh
+
+
+# Low undergrowth that fills the gaps between the trees
+func _bush_mesh() -> ArrayMesh:
+	var mesh := ArrayMesh.new()
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	for blob in [[Vector3(0, 0.7, 0), 1.3], [Vector3(1.0, 0.5, 0.4), 0.9], [Vector3(-0.8, 0.5, -0.5), 1.0]]:
+		var s := SphereMesh.new()
+		s.radius = blob[1]
+		s.height = blob[1] * 1.4
+		s.radial_segments = 6
+		s.rings = 3
+		st.append_from(s, 0, Transform3D(Basis(), blob[0]))
+	st.generate_normals()
+	st.commit(mesh)
+	mesh.surface_set_material(0, _flat_material(Color(0.06, 0.16, 0.05)))
+	return mesh
+
+
+func _fern_mesh() -> ArrayMesh:
+	var mesh := ArrayMesh.new()
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	for k in 8:
+		var yaw := k * TAU / 8.0 + (0.2 if k % 2 else 0.0)
+		var b := Basis(Vector3.UP, yaw) * Basis(Vector3.BACK, 0.45 + 0.2 * (k % 2))
+		var leaf := BoxMesh.new()
+		leaf.size = Vector3(1.4, 0.04, 0.3)
+		st.append_from(leaf, 0, Transform3D(b, Vector3(0, 0.15, 0) + b * Vector3(0.7, 0, 0)))
+	st.generate_normals()
+	st.commit(mesh)
+	mesh.surface_set_material(0, _flat_material(Color(0.1, 0.23, 0.07)))
+	return mesh
+
+
 func _cactus_mesh() -> ArrayMesh:
 	var mesh := ArrayMesh.new()
 	var st := SurfaceTool.new()
@@ -885,7 +1219,8 @@ func _flat_material(color: Color) -> StandardMaterial3D:
 
 # ---------- Sea and weather ----------
 
-func _build_sea() -> void:
+# Cartoon water shared by the sea and the ponds: turquoise in the shallows, deeper blue further down, foam on the edge
+func _water_material(depth_range: float) -> ShaderMaterial:
 	var shader := Shader.new()
 	shader.code = """
 shader_type spatial;
@@ -949,7 +1284,12 @@ void fragment() {
 	mat.shader = shader
 	mat.set_shader_parameter("shallow_color", water_shallow_color)
 	mat.set_shader_parameter("deep_color", water_deep_color)
-	mat.set_shader_parameter("depth_range", water_depth_range)
+	mat.set_shader_parameter("depth_range", depth_range)
+	return mat
+
+
+func _build_sea() -> void:
+	var mat := _water_material(water_depth_range)
 	var plane := PlaneMesh.new()
 	plane.size = Vector2.ONE * map_size * 4.0
 	plane.material = mat
@@ -962,6 +1302,139 @@ void fragment() {
 	var center := _road_center + dir * (coast_offset - 40.0 + plane.size.x * 0.5)
 	sea.transform = Transform3D(Basis(Vector3.UP, atan2(dir.x, dir.y)), Vector3(center.x, sea_level, center.y))
 	_generated.add_child(sea)
+
+
+# ---------- Lake and ponds ----------
+
+# The lake (if any) comes first, at a fixed spot and level. Then smaller ponds near the road (visible from it)
+# but not on it, without overlaps, on fairly flat ground: their water sits a bit under the lowest point of
+# the natural rim so it never spills out.
+func _place_ponds() -> void:
+	if lake_radius > 0.0:
+		_ponds.append({"c": lake_center, "r": lake_radius, "level": lake_level, "lake": true})
+	var rng := RandomNumberGenerator.new()
+	rng.seed = map_seed + 5
+	var road_half := road_width * 0.5 + verge_width
+	var wanted := _ponds.size() + (pond_count if ponds_enabled else 0)
+	var attempts := 0
+	while _ponds.size() < wanted and attempts < pond_count * 300:
+		attempts += 1
+		var r := rng.randf_range(pond_radius.x, pond_radius.y)
+		var x := _origin.x + rng.randf_range(80.0, map_size - 80.0)
+		var z := _origin.y + rng.randf_range(80.0, map_size - 80.0)
+		_find_nearest(x, z)
+		var gap := _nearest_dist - road_half - r * 1.3
+		if gap < 6.0 or gap > 90.0:
+			continue
+		var c := Vector2(x, z)
+		var overlaps := false
+		for other in _ponds:
+			if c.distance_to(other.c) < (r + other.r) * 1.3 + 10.0:
+				overlaps = true
+				break
+		if overlaps:
+			continue
+		var rim_min := INF
+		var rim_max := -INF
+		for k in 12:
+			var a := k * TAU / 12.0
+			var h := _terrain_height(x + cos(a) * r * 1.3, z + sin(a) * r * 1.3)
+			rim_min = minf(rim_min, h)
+			rim_max = maxf(rim_max, h)
+		if rim_max - rim_min > 7.0:
+			continue   # too steep a slope, the pond would look like a hole in a hillside
+		_ponds.append({"c": c, "r": r, "level": rim_min - 0.4, "lake": false})
+
+
+# Digs a smooth bowl under each pond: flat bottom in the middle, back to the natural ground further out.
+# Around the lake the land is first raised to at least 1 m above the water (a beach all around), so the
+# water never runs past the edge of its surface. Roads crossing the lake end up on a bridge (the bowl
+# is dug under them too).
+func _carve_ponds() -> void:
+	var n := _grid_n
+	for pond in _ponds:
+		var r: float = pond.r
+		var reach: float = r * (1.2 if pond.lake else 1.3)
+		var ix0 := maxi(floori((pond.c.x - reach - _origin.x) / terrain_step), 0)
+		var ix1 := mini(ceili((pond.c.x + reach - _origin.x) / terrain_step), n - 1)
+		var iz0 := maxi(floori((pond.c.y - reach - _origin.y) / terrain_step), 0)
+		var iz1 := mini(ceili((pond.c.y + reach - _origin.y) / terrain_step), n - 1)
+		var bottom: float = pond.level - (lake_depth if pond.lake else pond_depth)
+		for iz in range(iz0, iz1 + 1):
+			for ix in range(ix0, ix1 + 1):
+				var p := Vector2(_origin.x + ix * terrain_step, _origin.y + iz * terrain_step)
+				var d := p.distance_to(pond.c)
+				var i := iz * n + ix
+				var h := _heights[i]
+				if pond.lake:
+					# only where it is under water: on the dry shore the road keeps its own flat bed
+					var rl := _lake_r(p)
+					var target := lerpf(bottom, pond.level + 1.0, smoothstep(rl * 0.75, rl, d))
+					if target < pond.level:
+						_heights[i] = minf(h, target)
+				else:
+					_heights[i] = minf(h, lerpf(bottom, h, smoothstep(r * 0.55, reach, d)))
+
+
+# 1 on the low, wet banks around a pond (sand / mud color), 0 elsewhere
+func _pond_bank(x: float, z: float, h: float) -> float:
+	var bank := 0.0
+	for pond in _ponds:
+		var d := Vector2(x, z).distance_to(pond.c)
+		if pond.lake:
+			# only the slope down into the water is sand: the flat shore above stays green (and wooded)
+			var rl := _lake_r(Vector2(x, z))
+			if d < rl * 1.1:
+				bank = maxf(bank, (1.0 - smoothstep(pond.level + 0.2, pond.level + 0.9, h)) * (1.0 - smoothstep(rl, rl * 1.1, d)))
+		elif d < pond.r * 1.5:
+			bank = maxf(bank, (1.0 - smoothstep(pond.level + 0.3, pond.level + 1.4, h)) * (1.0 - smoothstep(pond.r * 1.2, pond.r * 1.5, d)))
+	return bank
+
+
+# margin is in pond radii. Around the lake, vegetation grows down to the water's edge.
+func _in_pond(x: float, z: float, margin: float) -> bool:
+	for pond in _ponds:
+		var d := Vector2(x, z).distance_to(pond.c)
+		if pond.lake:
+			if d < _lake_r(Vector2(x, z)) * 1.02 and _terrain_height(x, z) < pond.level + 0.6:
+				return true
+		elif d < pond.r * margin:
+			return true
+	return false
+
+
+# Lake radius in the direction of p: the nominal radius +/- 15 % with smooth bays and points, so the shore isn't a circle
+func _lake_r(p: Vector2) -> float:
+	if _lake_noise == null:
+		_lake_noise = FastNoiseLite.new()
+		_lake_noise.seed = map_seed + 9
+		_lake_noise.frequency = 0.012
+	var dir := (p - lake_center).normalized()
+	return lake_radius * (1.0 + clampf(_lake_noise.get_noise_2d(dir.x * 100.0, dir.y * 100.0) * 0.4, -0.15, 0.15))
+
+
+func _build_ponds_water() -> void:
+	var pond_mat := _water_material(pond_depth * 1.6)
+	pond_mat.set_shader_parameter("foam_width", 0.5)   # gentle banks: a sea-sized foam line would be a wide white ring
+	var lake_mat := _water_material(lake_depth * 1.3)
+	lake_mat.set_shader_parameter("foam_width", 0.5)
+	for i in _ponds.size():
+		var pond: Dictionary = _ponds[i]
+		var disc := CylinderMesh.new()
+		# the lake's edge hides under its raised shore, a pond's under its natural rim
+		disc.top_radius = pond.r * (1.17 if pond.lake else 1.25)
+		disc.bottom_radius = disc.top_radius
+		disc.height = 0.01
+		disc.radial_segments = 48 if pond.lake else 24
+		disc.rings = 1
+		disc.cap_bottom = false
+		disc.material = lake_mat if pond.lake else pond_mat
+		var water := MeshInstance3D.new()
+		water.name = "Lake" if pond.lake else "Pond%d" % i
+		water.mesh = disc
+		water.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		water.position = Vector3(pond.c.x, pond.level, pond.c.y)
+		_generated.add_child(water)
 
 
 func _build_snowfall() -> void:

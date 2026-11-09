@@ -1,0 +1,101 @@
+[gd_scene format=3 uid="uid://b47iqqtv3aybh"]
+
+[ext_resource type="Script" uid="uid://xntkipvhh8x8" path="res://track.gd" id="1_gen"]
+[ext_resource type="PackedScene" uid="uid://bydo03yuwv03w" path="res://CarModel.tscn" id="2_car"]
+[ext_resource type="Shader" uid="uid://10x2qtwltv87" path="res://ui/postfx.gdshader" id="postfx_shader"]
+
+[sub_resource type="Curve3D" id="RoadCurve"]
+closed = true
+_data = {
+"points": PackedVector3Array(0, 0, 0, 0, 0, 0, 13, 4, 184, 0, 0, 0, 0, 0, 0, -56, 4, 185, 0, 0, 0, 0, 0, 0, -101, 4.8, 161, 0, 0, 0, 0, 0, 0, -169, 8, 201, 0, 0, 0, 0, 0, 0, -219, 9.6, 165, 0, 0, 0, 0, 0, 0, -175, 8, 93, 0, 0, 0, 0, 0, 0, -184, 7.2, 46, 0, 0, 0, 0, 0, 0, -262, 9.6, 9, 0, 0, 0, 0, 0, 0, -265, 11.2, -56, 0, 0, 0, 0, 0, 0, -170, 6.4, -76, 0, 0, 0, 0, 0, 0, -93.522766, 4.8, -73.38365, 0, 0, 0, 0, 0, 0, -55.06, 4, 12.547432, 0, 0, 0, 0, 0, 0, 0, 4, -41, 0, 0, 0, 0, 0, 0, 75, 4, -23.31992, 0, 0, 0, 0, 0, 0, 129.97708, 4.8, -55, 0, 0, 0, 0, 0, 0, 173, 5.6, -56, 0, 0, 0, 0, 0, 0, 265, 9.6, -28, 0, 0, 0, 0, 0, 0, 268, 11.2, 23, 0, 0, 0, 0, 0, 0, 166, 6.4, 54, 0, 0, 0, 0, 0, 0, 162, 4.8, 109, 0, 0, 0, 0, 0, 0, 116, 4.8, 124, 0, 0, 0, 0, 0, 0, 99, 4.8, 171, 0, 0, 0, 0, 0, 0, 50, 4, 165),
+"tilts": PackedFloat32Array(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
+}
+point_count = 23
+
+[sub_resource type="ProceduralSkyMaterial" id="SkyMat"]
+sky_top_color = Color(0.16, 0.08, 0.26, 1)
+sky_horizon_color = Color(1, 0.62, 0.3, 1)
+sky_curve = 0.12
+ground_bottom_color = Color(0.06, 0.08, 0.05, 1)
+ground_horizon_color = Color(1, 0.62, 0.3, 1)
+sun_angle_max = 20.0
+sun_curve = 0.08
+
+[sub_resource type="Sky" id="Sky"]
+sky_material = SubResource("SkyMat")
+
+[sub_resource type="Environment" id="Env"]
+background_mode = 2
+sky = SubResource("Sky")
+ambient_light_color = Color(0.67481464, 0.67481464, 0.6748146, 1)
+ambient_light_sky_contribution = 0.11
+ambient_light_energy = 0.8
+tonemap_mode = 4
+tonemap_exposure = 1.05
+ssao_enabled = true
+glow_enabled = true
+glow_intensity = 1.0
+glow_strength = 1.2
+glow_bloom = 0.08
+glow_hdr_threshold = 0.9
+fog_enabled = true
+fog_light_color = Color(0.7, 0.62, 0.35, 1)
+fog_light_energy = 0.5
+fog_sun_scatter = 0.5
+fog_density = 0.0
+fog_aerial_perspective = 1.0
+fog_sky_affect = 0.0
+fog_height_density = 0.5614
+adjustment_enabled = true
+adjustment_saturation = 1.2
+
+[sub_resource type="ShaderMaterial" id="PostFXMat"]
+shader = ExtResource("postfx_shader")
+shader_parameter/color_levels = 34.09600152456
+shader_parameter/dither_strength = 0.92800004408
+shader_parameter/chromatic_aberration = 0.0015
+shader_parameter/vignette = 0.35
+shader_parameter/tint = Color(1, 0.96, 0.92, 1)
+shader_parameter/pixel_rows = 360.0
+
+[node name="Jungle" type="Node3D" unique_id=1210047467]
+script = ExtResource("1_gen")
+biome = 3
+road_points = PackedVector3Array(13, 184, 2.5, -56, 185, 2.5, -101, 161, 3, -169, 201, 5, -219, 165, 6, -175, 93, 5, -184, 46, 4.5, -262, 9, 6, -265, -56, 7, -170, -76, 4, -129, -55, 3, -75, -37, 2.5, 0, -41, 2.5, 75, -37, 2.5, 129, -55, 3, 173, -56, 3.5, 265, -28, 6, 268, 23, 7, 166, 54, 4, 162, 109, 3, 116, 124, 3, 99, 171, 3, 50, 165, 2.5)
+surface_sections = PackedVector3Array(2, 10, 1, 15, 19, 2, 19, 21, 1)
+hill_height = 22.0
+mountain_height = 120.0
+ponds_enabled = true
+pond_count = 6
+pond_radius = Vector2(18, 32)
+lake_radius = 145.0
+
+[node name="RoadPath" type="Path3D" parent="." unique_id=1625493104]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 29.345474)
+curve = SubResource("RoadCurve")
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="." unique_id=1998884648]
+environment = SubResource("Env")
+
+[node name="Sun" type="DirectionalLight3D" parent="." unique_id=1694533841]
+transform = Transform3D(0.66131186, -0.15339474, 0.73425895, 0, 0.9788674, 0.20449595, -0.75011104, -0.13523565, 0.64733636, 0, 20, 0)
+light_color = Color(1, 0.7, 0.4, 1)
+light_energy = 1.6
+shadow_enabled = true
+shadow_opacity = 0.8
+shadow_blur = 1.169
+directional_shadow_fade_start = 0.738
+directional_shadow_max_distance = 150.0
+
+[node name="Car" parent="." unique_id=451785690 instance=ExtResource("2_car")]
+
+[node name="PostFX" type="CanvasLayer" parent="." unique_id=567380074]
+
+[node name="Filter" type="ColorRect" parent="PostFX" unique_id=1721143930]
+material = SubResource("PostFXMat")
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
