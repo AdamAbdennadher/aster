@@ -9,12 +9,16 @@ const CAM_ROTATE_SPEED = 5.0
 @export_group("Steering")
 @export var max_steer := 0.8              ## radians
 @export var max_steer_at_speed := 0.35    ## radians
+@export var max_turn_rate := 2.2          ## rad/s the car turns at full lock outside drifts, whatever its speed (keeps the turn steady)
+@export var handling_ref_speed := 40.0     ## km/h: above this, turning and drifting calm down so high speed feels like this speed
+@export var turn_speed_falloff := 0.5     ## how much turning calms down above handling_ref_speed: 0 = not at all, 1 = a lot (truck-like)
+@export var drift_speed_falloff := 0.25    ## same for the drift rotation (the drift path keeps curving at any speed)
 @export var steer_speed_ref := 30.0       ## m/s at which max_steer_at_speed is reached
-@export var steer_rate := 4.0
+@export var steer_time := 0.25            ## seconds for the wheels to go from straight to full lock, at any speed
 @export var drift_steer_bonus := 0.35     ## extra steering angle while drifting
 @export var countersteer_assist := 0.5
-@export var turn_sharpness := 1.5         ## 1 = what the steering angle gives, higher = tighter turns (wheel angle unchanged)
-@export var turn_assist_ramp := 0.8      ## seconds of holding the steering before the extra turning is fully on (a tap feels like before)
+@export var turn_sharpness := 1.15        ## 1 = what the steering angle gives, higher = tighter turns (wheel angle unchanged)
+@export var steer_smoothing := 5.0        ## how fast the steering input builds up (keyboard is all-or-nothing): lower = more gradual
 
 @export_group("Drift")
 @export var handbrake_grip := 0.3         ## multiplier of the rear wheels' base friction
@@ -22,7 +26,8 @@ const CAM_ROTATE_SPEED = 5.0
 @export var handbrake_brake := 0.4
 @export var grip_loss_speed := 10.0
 @export var grip_recovery_speed := 1.5
-@export var drift_min_angle_deg := 8.0
+@export var drift_min_angle_deg := 8.0    ## sliding this much with throttle on switches to drift mode (the handbrake always does)
+@export var drift_keep_angle_deg := 3.0   ## once drifting, the drift goes on until the slide drops below this (so it does not cut out right after the handbrake)
 @export var drift_min_speed := 5.0        ## m/s
 
 @export_group("Drift assist")
@@ -31,6 +36,7 @@ const CAM_ROTATE_SPEED = 5.0
 @export var drift_traction := 0.8         ## rad/s at which velocity rotates toward the car's nose
 @export var drift_speed_keep := 0.9       ## 0..1, share of the speed lost while sliding that is given back
 @export var max_drift_angle_deg := 45.0
+@export var countersteer_boost := 1.6      ## countersteering in a drift turns back this much faster, to catch the slide
 
 @export_group("Camera")
 @export var mouse_sensitivity := 0.003
@@ -67,7 +73,7 @@ var _follow_yaw := 0.0
 var _cam_yaw := 0.0          # player offset around the car (mouse / right stick)
 var _cam_pitch := 0.0
 var _cam_idle := 0.0
-var _turn_blend := 0.0      # 0 = no turn assist, 1 = full; grows while the steering is held
+var _steer_smooth := 0.0    # steering input eased in over time, so taps and holds stay gradual
 var _wheel_visuals: Array = []   # [wheel, mesh, mesh rest transform]
 
 
@@ -89,11 +95,19 @@ func _physics_process(delta: float) -> void:
 	var steer_input := Input.get_axis("steer_right", "steer_left") if playing else 0.0
 	var handbrake := Input.is_action_pressed("handbrake") if playing else false
 	throttle_input = throttle
+	# the handbrake flick stays instant (drift entry), everything else builds up gradually
+	if handbrake:
+		_steer_smooth = steer_input
+	else:
+		# a bit quicker in a drift so corrections and countersteer come in time, still not all-or-nothing
+		_steer_smooth = move_toward(_steer_smooth, steer_input, steer_smoothing * (1.6 if is_drifting else 1.0) * delta)
 
 	update_slip()
 
 	var sliding: bool = speed > drift_min_speed and absf(slip_angle) > deg_to_rad(drift_min_angle_deg)
-	is_drifting = handbrake or (sliding and throttle > 0.1)
+	# two thresholds: entering a drift needs a real slide, staying in it only a small one
+	var still_sliding: bool = speed > drift_min_speed and absf(slip_angle) > deg_to_rad(drift_keep_angle_deg)
+	is_drifting = handbrake or (throttle > 0.1 and (sliding or (is_drifting and still_sliding)))
 
 	var target_grip := 1.0
 	if handbrake:
@@ -106,22 +120,25 @@ func _physics_process(delta: float) -> void:
 		wheel.wheel_friction_slip = rear_base_grip * rear_grip_factor
 		wheel.brake = handbrake_brake if handbrake else 0.0
 
-	var steer_limit := lerpf(max_steer, max_steer_at_speed, clampf(speed / steer_speed_ref, 0.0, 1.0))
+	var steer_limit: float
 	if is_drifting:
-		steer_limit += drift_steer_bonus
-	var target_steer := steer_input * steer_limit
+		steer_limit = lerpf(max_steer, max_steer_at_speed, clampf(speed / steer_speed_ref, 0.0, 1.0)) + drift_steer_bonus
+	else:
+		# wheel angle that gives max_turn_rate at this speed: the car does not turn sharper and sharper as it slows
+		var wheelbase := absf($FL.position.z - $BL.position.z)
+		steer_limit = minf(max_steer, atan(wheelbase * max_turn_rate * _speed_scale(turn_speed_falloff) / maxf(speed, 1.0)))
+	var target_steer := _steer_smooth * steer_limit
 	if sliding:
 		target_steer += slip_angle * countersteer_assist
 	target_steer = clampf(target_steer, -max_steer - drift_steer_bonus, max_steer + drift_steer_bonus)
-	steering = move_toward(steering, target_steer, steer_rate * delta)
+	steering = move_toward(steering, target_steer, steer_limit / steer_time * delta)
 
 	engine_force = throttle * engine_power
 
 	if is_drifting and is_on_ground():
-		drift_assist(steer_input, handbrake, delta)
-		_turn_blend = 0.0
+		drift_assist(_steer_smooth, handbrake, delta)
 	else:
-		_turn_assist(steer_input, delta)
+		_turn_assist(delta)
 	last_speed = speed
 
 	_apply_bump_stops()
@@ -186,31 +203,35 @@ func _process(_delta: float) -> void:
 
 
 # Tighter turns without a bigger wheel angle: the car yaws turn_sharpness times faster than its steering angle
-# would give with perfect grip, and its trajectory follows the nose so it turns instead of sliding.
-func _turn_assist(steer_input: float, delta: float) -> void:
-	# fades in while the steering is held, drops quickly when released: taps keep the original feel
-	var held := absf(steer_input)
-	var rate := delta / maxf(turn_assist_ramp, 0.01) if held > _turn_blend else delta * 4.0
-	_turn_blend = move_toward(_turn_blend, held, rate)
-	if turn_sharpness <= 1.0 or _turn_blend < 0.01 or speed < 2.0 or absf(steering) < 0.02 or not is_on_ground():
+# would give with perfect grip (same ratio from the start of the turn, so the response stays predictable),
+# and its trajectory follows the nose so it turns instead of sliding.
+func _turn_assist(delta: float) -> void:
+	if turn_sharpness <= 1.0 or speed < 2.0 or absf(steering) < 0.02 or not is_on_ground():
 		return
-	var strength := _turn_blend * _turn_blend
 	var up := Vector3.UP
 	var forward_speed := (global_basis.inverse() * linear_velocity).z
 	var wheelbase := absf($FL.position.z - $BL.position.z)
 	var natural := forward_speed * tan(steering) / wheelbase
-	var desired := natural * turn_sharpness
+	# capped: right after a drift the wheels are still turned a lot, which would otherwise ask for a violent yaw
+	var cap := max_turn_rate * _speed_scale(turn_speed_falloff) * turn_sharpness
+	var desired := clampf(natural * turn_sharpness, -cap, cap)
 	var yaw := angular_velocity.dot(up)
-	var yaw_change := up * (desired - yaw) * clampf(6.0 * delta, 0.0, 1.0) * strength
+	var yaw_change := up * (desired - yaw) * clampf(6.0 * delta, 0.0, 1.0)
 	# impulses add to the physics step instead of overwriting it (setting the velocities would cancel the engine)
 	apply_torque_impulse(get_inverse_inertia_tensor().inverse() * yaw_change)
 
 	var vel := linear_velocity
 	var flat := Vector3(vel.x, 0.0, vel.z)
 	var nose := Vector3(global_basis.z.x, 0.0, global_basis.z.z).normalized() * signf(forward_speed)
-	var max_turn := (absf(desired) + 0.5) * delta * strength
+	var max_turn := (absf(desired) + 0.5) * delta
 	var turned := flat.rotated(up, clampf(flat.signed_angle_to(nose, up), -max_turn, max_turn))
 	apply_central_impulse((turned - flat) * mass)
+
+
+# 1 below handling_ref_speed, then shrinks with speed (falloff 1 = inversely proportional to speed)
+func _speed_scale(falloff: float) -> float:
+	var ref := handling_ref_speed / 3.6
+	return pow(minf(1.0, ref / maxf(speed, 0.1)), falloff)
 
 
 func is_on_ground() -> bool:
@@ -225,11 +246,15 @@ func drift_assist(steer_input: float, handbrake: bool, delta: float) -> void:
 	var yaw_rate := angular_velocity.dot(up)
 	var max_angle := deg_to_rad(max_drift_angle_deg)
 
-	var desired_yaw := steer_input * drift_yaw_rate * clampf(speed / 10.0, 0.0, 1.0)
+	var desired_yaw := steer_input * drift_yaw_rate * clampf(speed / 10.0, 0.0, 1.0) * _speed_scale(drift_speed_falloff)
 	# Yawing against the sign of slip_angle widens the drift: past max angle, block that and pull back.
 	var opening := -signf(slip_angle) * desired_yaw > 0.0
 	if absf(slip_angle) > max_angle and opening:
 		desired_yaw = signf(slip_angle) * (absf(slip_angle) - max_angle) * 6.0
+	# countersteering = already sliding and steering to reduce the slide: turn back faster, pull the trajectory onto the nose sooner
+	var countersteering := absf(slip_angle) > deg_to_rad(4.0) and signf(slip_angle) * desired_yaw > 0.0
+	if countersteering and absf(slip_angle) <= max_angle:
+		desired_yaw *= countersteer_boost
 	angular_velocity += up * (desired_yaw - yaw_rate) * clampf(drift_yaw_control * delta, 0.0, 1.0)
 
 	var vel := linear_velocity
@@ -238,7 +263,8 @@ func drift_assist(steer_input: float, handbrake: bool, delta: float) -> void:
 		return
 	var forward := Vector3(global_basis.z.x, 0.0, global_basis.z.z).normalized()
 	var angle_to_nose := flat_vel.signed_angle_to(forward, up)
-	flat_vel = flat_vel.rotated(up, clampf(angle_to_nose, -drift_traction * delta, drift_traction * delta))
+	var traction := drift_traction * (countersteer_boost if countersteering else 1.0)
+	flat_vel = flat_vel.rotated(up, clampf(angle_to_nose, -traction * delta, traction * delta))
 
 	if not handbrake and flat_vel.length() < last_speed:
 		flat_vel = flat_vel.normalized() * lerpf(flat_vel.length(), last_speed, drift_speed_keep)
@@ -276,6 +302,7 @@ func reset_car() -> void:
 	engine_force = 0.0
 	steering = 0.0
 	rear_grip_factor = 1.0
+	_steer_smooth = 0.0
 	_flipped_time = 0.0
 	global_transform = spawn_transform
 	snap_camera()
