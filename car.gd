@@ -55,6 +55,8 @@ const CAM_ROTATE_SPEED = 5.0
 @export var flip_tilt := 0.35             ## car up-vector dot world-up below this counts as flipped (~70 deg)
 @export var flip_time := 2.0              ## seconds stuck flipped before game over
 
+signal car_reset   # R pressed (or fell in the sea): the car is back at the spawn
+
 @onready var camera_pivot: Node3D = $CameraPivot
 @onready var camera_3d: Camera3D = $CameraPivot/Camera3D
 @onready var rear_wheels: Array[VehicleWheel3D] = [$BL, $BR]
@@ -78,6 +80,7 @@ var _wheel_visuals: Array = []   # [wheel, mesh, mesh rest transform]
 
 
 func _ready() -> void:
+	add_to_group("player_car")
 	Game.state_changed.connect(_on_game_state)
 	_on_game_state(Game.state)
 	spawn_transform = global_transform
@@ -306,6 +309,7 @@ func reset_car() -> void:
 	_flipped_time = 0.0
 	global_transform = spawn_transform
 	snap_camera()
+	car_reset.emit()
 
 
 func update_camera(delta: float) -> void:

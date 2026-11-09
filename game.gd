@@ -7,6 +7,8 @@ enum State { MENU, PLAYING, PAUSED, GAME_OVER }
 const MENU_SCENE := "res://menu.tscn"
 const GAME_OVER_SCENE := "res://ui/game_over.tscn"
 const SETTINGS_FILE := "user://settings.cfg"
+const RECORDS_FILE := "user://records.cfg"
+const RECORDS_KEPT := 5
 const PIXEL_ROWS := 540.0      # height of the 3D image in pixels, whatever the window size (matches postfx.gdshader)
 const MAPS := [
 	{"name": "MOUNTAIN", "scene": "res://mountain.tscn"},
@@ -16,15 +18,20 @@ const MAPS := [
 
 signal state_changed(state: State)
 signal input_device_changed(gamepad: bool)
+signal race_started                                     # first time over the finish line: the clock runs
+signal lap_completed(time: float, rank: int, previous_best: float)   # rank 1 = new record, 0 = not in the top
+signal race_reset                                       # car back at the spawn, waiting to cross the line
 
 var state := State.PLAYING:
 	set(value):
 		state = value
 		state_changed.emit(value)
 var current_map := ""
+var race: Node                # lap timer of the current map (race.gd), null on maps without laps
 var using_gamepad := false   # last input came from a controller (the HUD shows the matching buttons)
 
 var _volumes := {"Master": 0.8, "Music": 0.7, "Engine": 0.8, "SFX": 0.8}
+var _records := {}           # map scene path -> best lap times (seconds), fastest first
 
 const DISPLAY_MODES := ["windowed", "fullscreen", "exclusive"]
 const RESOLUTIONS := [Vector2i(1280, 720), Vector2i(1600, 900), Vector2i(1920, 1080), Vector2i(2560, 1440), Vector2i(3840, 2160)]
@@ -40,6 +47,7 @@ func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	_setup_audio_buses()
 	_load_settings()
+	_load_records()
 	apply_display()
 	var layer := CanvasLayer.new()
 	layer.layer = 100
@@ -50,6 +58,7 @@ func _ready() -> void:
 	_fade.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	layer.add_child(_fade)
 	add_child(load("res://ui/hud.gd").new())
+	add_child(load("res://ui/race_hud.gd").new())
 	get_tree().root.size_changed.connect(_update_3d_scale)
 	_update_3d_scale()
 	_detect_start_scene.call_deferred()
@@ -199,6 +208,46 @@ func apply_display() -> void:
 		_:
 			window.mode = Window.MODE_FULLSCREEN
 	_update_3d_scale.call_deferred()
+
+
+# ---------- Lap records ----------
+
+func get_records(map: String) -> Array:
+	return _records.get(map, [])
+
+
+func best_time(map: String) -> float:
+	var list := get_records(map)
+	return list[0] if not list.is_empty() else INF
+
+
+## Saves the lap if it makes the top RECORDS_KEPT. Returns its rank (1 = new record), or 0 if it is not in the top.
+func add_lap_time(map: String, time: float) -> int:
+	var list: Array = get_records(map).duplicate()
+	list.append(time)
+	list.sort()
+	list.resize(mini(list.size(), RECORDS_KEPT))
+	_records[map] = list
+	var cfg := ConfigFile.new()
+	for key in _records:
+		cfg.set_value("records", key, _records[key])
+	cfg.save(RECORDS_FILE)
+	var rank := list.find(time)
+	return rank + 1 if rank != -1 else 0
+
+
+func _load_records() -> void:
+	var cfg := ConfigFile.new()
+	if cfg.load(RECORDS_FILE) != OK:
+		return
+	for key in cfg.get_section_keys("records"):
+		_records[key] = cfg.get_value("records", key, [])
+
+
+## m:ss.mmm
+func format_time(t: float) -> String:
+	var ms := int(round(t * 1000.0))
+	return "%d:%02d.%03d" % [ms / 60000, (ms / 1000) % 60, ms % 1000]
 
 
 # ---------- Audio ----------

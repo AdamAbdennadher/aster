@@ -7,6 +7,7 @@ const VOLUMES := [["master", "Master"], ["music", "Music"], ["engine", "Engine"]
 var _root: Control
 var _main: VBoxContainer
 var _maps: VBoxContainer
+var _records: VBoxContainer
 var _settings: VBoxContainer
 var _opened_from: Control      # button to focus again when coming back to the main panel
 
@@ -36,6 +37,10 @@ func _ready() -> void:
 	var change_map := _button("change map", Callable())
 	change_map.get_child(0).pressed.connect(_open.bind(_get_maps, change_map))
 	_main.add_child(change_map)
+	if is_instance_valid(Game.race):
+		var records := _button("records", Callable())
+		records.get_child(0).pressed.connect(_open.bind(_get_records, records))
+		_main.add_child(records)
 	var settings := _button("settings", Callable())
 	settings.get_child(0).pressed.connect(_open.bind(_get_settings, settings))
 	_main.add_child(settings)
@@ -49,6 +54,39 @@ func _ready() -> void:
 	_maps.add_child(_gap(14))
 	_maps.add_child(_button("back", _show_main, 11))
 	_maps.visible = false
+
+	_records = _column()
+	_records.add_child(_title("records"))
+	var map_name := Label.new()
+	map_name.text = Game.current_map.get_file().get_basename().to_lower()
+	map_name.label_settings = UIStyle.label(10, UIStyle.DIM, 0.0, 400, 3)
+	map_name.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_records.add_child(map_name)
+	_records.add_child(_gap(14))
+	var times := Game.get_records(Game.current_map)
+	if times.is_empty():
+		var none := Label.new()
+		none.text = "no lap yet"
+		none.label_settings = UIStyle.label(12, UIStyle.DIM, 0.0, 300, 2)
+		none.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		_records.add_child(none)
+	for rank in times.size():
+		var row := HBoxContainer.new()
+		row.alignment = BoxContainer.ALIGNMENT_CENTER
+		row.add_theme_constant_override("separation", 24)
+		var place := Label.new()
+		place.text = str(rank + 1)
+		place.custom_minimum_size = Vector2(16, 0)
+		place.label_settings = UIStyle.label(12, UIStyle.DIM, 0.0, 400, 1)
+		row.add_child(place)
+		var time := Label.new()
+		time.text = Game.format_time(times[rank])
+		time.label_settings = UIStyle.label(14, UIStyle.WHITE if rank == 0 else UIStyle.DIM, 0.0, 300, 2)
+		row.add_child(time)
+		_records.add_child(row)
+	_records.add_child(_gap(14))
+	_records.add_child(_button("back", _show_main, 11))
+	_records.visible = false
 
 	_settings = _column()
 	_settings.add_child(_title("settings"))
@@ -69,7 +107,7 @@ func _ready() -> void:
 func _unhandled_input(event: InputEvent) -> void:
 	if event.is_action_pressed("pause") or event.is_action_pressed("ui_cancel"):
 		get_viewport().set_input_as_handled()
-		if _settings.visible or _maps.visible:
+		if _settings.visible or _maps.visible or _records.visible:
 			_show_main()
 		else:
 			Game.resume()
@@ -131,6 +169,10 @@ func _get_maps() -> Control:
 	return _maps
 
 
+func _get_records() -> Control:
+	return _records
+
+
 func _get_settings() -> Control:
 	return _settings
 
@@ -161,6 +203,7 @@ func _first_focusable(node: Node) -> Control:
 func _show_main() -> void:
 	_settings.visible = false
 	_maps.visible = false
+	_records.visible = false
 	_main.visible = true
 	if _opened_from:
 		_opened_from.get_child(0).grab_focus()

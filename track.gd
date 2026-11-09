@@ -33,6 +33,7 @@ enum Surface { ASPHALT, DIRT }
 @export var guardrail_curvature := 0.014  ## 1/m, corners tighter than ~70 m radius get a rail on the outside
 @export var spawn_sample := 5             ## where the car starts along the road (1 sample = 2 m)
 @export var spawn_height := 0.68           ## car body height above the road at spawn (it rests at about 0.65, so it barely drops)
+@export var finish_offset := 15            ## the finish line is this many samples ahead of the spawn (1 sample = 2 m)
 
 @export_group("Terrain")
 @export var map_size := 1400.0
@@ -80,6 +81,10 @@ func _ready() -> void:
 	generate()
 	if not Engine.is_editor_hint():
 		_place_car()
+		var race: Node = load("res://race.gd").new()
+		race.name = "Race"
+		race.setup(self, finish_index())
+		add_child(race)
 
 
 # Editor only: rebuild the map shortly after the RoadPath curve stops changing (rebuilding takes ~1.5 s,
@@ -126,6 +131,7 @@ func generate() -> void:
 	_build_terrain()
 	_build_road_mesh()
 	_build_guardrails()
+	_build_finish_line()
 	_build_props()
 	if sea_enabled:
 		_build_sea()
@@ -531,6 +537,69 @@ void fragment() {
 }
 """
 	return shader
+
+
+# ---------- Finish line ----------
+
+func finish_index() -> int:
+	return (clampi(spawn_sample, 0, samples.size() - 1) + finish_offset) % samples.size()
+
+
+# Checkered strip painted across the road, under a thin white neon gantry (visual only, no collision)
+func _build_finish_line() -> void:
+	var i := finish_index()
+	var forward := tangents[i]
+	var right := _right(i)
+	var up := right.cross(forward).normalized()
+	var basis := Basis(-right, up, forward)   # right-handed (Basis(right, up, forward) would be mirrored and hide the top face)
+	var origin := samples[i]
+
+	var checker := Shader.new()
+	checker.code = """
+shader_type spatial;
+void fragment() {
+	vec2 cell = floor(UV * vec2(14.0, 2.0));
+	float white = mod(cell.x + cell.y, 2.0);
+	ALBEDO = mix(vec3(0.04), vec3(0.92), white);
+	EMISSION = vec3(0.25) * white;
+	ROUGHNESS = 0.8;
+}
+"""
+	var strip_mat := ShaderMaterial.new()
+	strip_mat.shader = checker
+	var strip := PlaneMesh.new()
+	strip.size = Vector2(road_width, 1.6)
+	strip.material = strip_mat
+	var strip_node := MeshInstance3D.new()
+	strip_node.name = "FinishLine"
+	strip_node.mesh = strip
+	strip_node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	_generated.add_child(strip_node)
+	strip_node.global_transform = Transform3D(basis, origin + up * 0.03)
+
+	var neon := StandardMaterial3D.new()
+	neon.albedo_color = Color(1, 1, 1)
+	neon.emission_enabled = true
+	neon.emission = Color(1, 0.98, 0.94)
+	neon.emission_energy_multiplier = 2.0
+	var span := road_width * 0.5 + verge_width + 0.8
+	var height := 5.0
+	for side in [-1.0, 1.0]:
+		var post := MeshInstance3D.new()
+		var box := BoxMesh.new()
+		box.size = Vector3(0.12, height, 0.12)
+		box.material = neon
+		post.mesh = box
+		_generated.add_child(post)
+		post.global_transform = Transform3D(basis, origin + right * side * span + up * height * 0.5)
+	var bar := MeshInstance3D.new()
+	var bar_box := BoxMesh.new()
+	bar_box.size = Vector3(span * 2.0 + 0.12, 0.1, 0.12)
+	bar_box.material = neon
+	bar.mesh = bar_box
+	bar.name = "FinishGantry"
+	_generated.add_child(bar)
+	bar.global_transform = Transform3D(basis, origin + up * height)
 
 
 # ---------- Guardrails ----------

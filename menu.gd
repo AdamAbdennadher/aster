@@ -116,11 +116,22 @@ func _build_ui() -> void:
 	var list := VBoxContainer.new()
 	list.add_theme_constant_override("separation", 14)
 	for m in Game.MAPS:
+		var entry := VBoxContainer.new()
+		entry.add_theme_constant_override("separation", 0)
 		var b := NeonButton.new()
 		b.text = m.name.to_lower()
 		b.text_size = 18
 		b.pressed.connect(Game.play_map.bind(m.scene))
-		list.add_child(b)
+		entry.add_child(b)
+		# personal best under the name
+		var best: float = Game.best_time(m.scene)
+		if best < INF:
+			var best_label := Label.new()
+			best_label.text = "best  " + Game.format_time(best)
+			best_label.label_settings = UIStyle.label(8, UIStyle.DIM, 0.0, 400, 1)
+			best_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+			entry.add_child(best_label)
+		list.add_child(entry)
 	_maps = _centered(panel, list, 120)
 
 	var back := NeonButton.new()
@@ -162,7 +173,7 @@ func _show_select() -> void:
 	_maps.visible = true
 	_back.visible = true
 	_animate(true)
-	_maps.get_child(0).get_child(0).grab_focus()
+	_maps.get_child(0).get_child(0).get_child(0).grab_focus()
 
 
 func _show_title() -> void:
