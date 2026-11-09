@@ -1,4 +1,4 @@
-[gd_scene format=4 uid="uid://crxuahqbffn0l"]
+[gd_scene format=4 uid="uid://bp5uqvd87ltb6"]
 
 [ext_resource type="Script" path="res://car.gd" id="1_br2n7"]
 [ext_resource type="Material" uid="uid://d2qviy2iive3t" path="res://models/car/materials/Matériau.005.tres" id="1_we3gq"]

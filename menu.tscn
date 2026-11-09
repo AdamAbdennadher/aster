@@ -1,7 +1,7 @@
-[gd_scene format=3 uid="uid://di1m8ktfk7vvy"]
+[gd_scene format=3 uid="uid://bds7s13r0ye"]
 
 [ext_resource type="Script" path="res://menu.gd" id="1_menu"]
-[ext_resource type="PackedScene" uid="uid://f3ipjiiua4ot" path="res://desert.tscn" id="2_desert"]
+[ext_resource type="PackedScene" uid="uid://dmkg6ntmncw73" path="res://desert.tscn" id="2_desert"]
 
 [node name="Menu" type="Node3D" unique_id=2049705943]
 script = ExtResource("1_menu")

@@ -1,6 +1,6 @@
-[gd_scene format=3 uid="uid://wr7q1g8sd2fd"]
+[gd_scene format=3 uid="uid://lsdef78xdhnu"]
 
-[ext_resource type="PackedScene" uid="uid://crxuahqbffn0l" path="res://CarModel.tscn" id="1_37kl0"]
+[ext_resource type="PackedScene" uid="uid://bp5uqvd87ltb6" path="res://CarModel.tscn" id="1_37kl0"]
 [ext_resource type="Shader" uid="uid://10x2qtwltv87" path="res://ui/postfx.gdshader" id="postfx_shader"]
 
 [sub_resource type="ProceduralSkyMaterial" id="SkyMat"]
