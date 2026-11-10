@@ -327,6 +327,12 @@ func reset_car() -> void:
 	rear_grip_factor = 1.0
 	_steer_smooth = 0.0
 	_flipped_time = 0.0
+	# Teleport in the physics server itself: only setting the node transform can get overwritten by
+	# the physics state on the next step, and the car stays where it was
+	var rid := get_rid()
+	PhysicsServer3D.body_set_state(rid, PhysicsServer3D.BODY_STATE_TRANSFORM, spawn_transform)
+	PhysicsServer3D.body_set_state(rid, PhysicsServer3D.BODY_STATE_LINEAR_VELOCITY, Vector3.ZERO)
+	PhysicsServer3D.body_set_state(rid, PhysicsServer3D.BODY_STATE_ANGULAR_VELOCITY, Vector3.ZERO)
 	global_transform = spawn_transform
 	snap_camera()
 	car_reset.emit()
