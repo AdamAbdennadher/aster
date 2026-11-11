@@ -3,8 +3,8 @@ extends Node3D
 ## Procedural track: terrain, road with markings, guardrails on tight corners, props (trees, cacti, rocks),
 ## optional sea and snowfall. Everything is rebuilt on load (and in the editor), nothing generated is saved.
 
-enum Biome { MOUNTAIN, DESERT, SNOW, JUNGLE }
-enum Surface { ASPHALT, DIRT }
+enum Biome { MOUNTAIN, DESERT, SNOW, JUNGLE, ISLAND }
+enum Surface { ASPHALT, DIRT, SAND }
 
 @export var regenerate := false:
 	set(value):
@@ -54,6 +54,17 @@ enum Surface { ASPHALT, DIRT }
 @export var water_shallow_color := Color(0.2, 0.95, 0.85)
 @export var water_deep_color := Color(0.0, 0.48, 0.72)
 @export var water_depth_range := 7.0          ## meters over which the water goes from shallow to deep color
+@export var beach_height := 3.0                ## height of the sand band above the water
+@export var lagoon_depth := 1.5                ## depth of the shallow band along the coast, before the open sea
+@export var sea_foam_width := 0.9
+@export var water_reflection := 1.0             ## how much the sea mirrors the sky (lower keeps it turquoise far away)
+## > 0: the sea surrounds an island of this radius (with an uneven coastline) instead of lying on one side
+@export var island_radius := 0.0
+@export var island_center := Vector2.ZERO
+
+@export_group("Volcano")
+@export var volcano_height := 0.0             ## 0 = none. Cone at island_center with a glowing crater
+@export var volcano_radius := 170.0
 
 @export_group("Ponds")
 @export var ponds_enabled := false
@@ -90,6 +101,7 @@ var _regen_at := -1.0
 var _ponds: Array = []        # {c: Vector2 center, r: radius, level: water height}
 var _bridge := PackedByteArray()  # per road sample: 1 where the road runs over water (bridge deck, with a few samples of margin)
 var _lake_noise: FastNoiseLite
+var _island_noise: FastNoiseLite
 
 
 func _ready() -> void:
@@ -160,6 +172,8 @@ func generate() -> void:
 	_build_props()
 	if sea_enabled:
 		_build_sea()
+	if volcano_height > 0.0:
+		_build_crater_glow()
 	if not _ponds.is_empty():
 		_build_ponds_water()
 	if snowfall:
@@ -176,6 +190,13 @@ func _palette() -> Dictionary:
 				"steep": Color(0.52, 0.27, 0.17), "verge": Color(0.58, 0.42, 0.28),
 				"beach": Color(0.86, 0.72, 0.5), "road_verge": Color(0.6, 0.45, 0.3),
 				"asphalt": Color(0.13, 0.11, 0.11),
+			}
+		Biome.ISLAND:
+			return {
+				"ground": Color(0.13, 0.3, 0.09), "ground_alt": Color(0.2, 0.36, 0.11),
+				"steep": Color(0.3, 0.25, 0.2), "verge": Color(0.9, 0.75, 0.42),
+				"beach": Color(0.99, 0.86, 0.5), "road_verge": Color(0.86, 0.7, 0.4),
+				"asphalt": Color(0.13, 0.13, 0.15), "volcanic": Color(0.2, 0.16, 0.15),
 			}
 		Biome.JUNGLE:
 			return {
@@ -207,6 +228,14 @@ func _props() -> Array:
 			return [
 				{"mesh": _cactus_mesh(), "count": 900, "road_gap": 5.0, "radius": 0.4, "scale": Vector2(0.7, 1.4), "sink": 0.2},
 				{"mesh": _rock_mesh(Color(0.5, 0.28, 0.18)), "count": 700, "road_gap": 4.0, "radius": 1.0, "scale": Vector2(0.4, 2.5), "sink": 0.4},
+			]
+		Biome.ISLAND:
+			return [
+				{"mesh": _palm_mesh(), "count": 6000, "road_gap": 4.0, "radius": 0.3, "scale": Vector2(0.9, 1.5), "sink": 0.2, "max_h": 16.0},
+				{"mesh": _jungle_tree_mesh(), "count": 6000, "road_gap": 5.0, "radius": 0.45, "scale": Vector2(0.7, 1.4), "sink": 0.3, "min_h": 5.0, "max_h": 60.0},
+				{"mesh": _bush_mesh(), "count": 6000, "road_gap": 3.5, "radius": 0.0, "scale": Vector2(0.6, 1.5), "sink": 0.3, "max_h": 60.0},
+				{"mesh": _fern_mesh(), "count": 9000, "road_gap": 2.5, "radius": 0.0, "scale": Vector2(0.6, 1.4), "sink": 0.05, "max_h": 60.0},
+				{"mesh": _rock_mesh(Color(0.17, 0.14, 0.13)), "count": 500, "road_gap": 4.0, "radius": 1.0, "scale": Vector2(0.5, 2.5), "sink": 0.5},
 			]
 		Biome.JUNGLE:
 			return [
@@ -345,6 +374,9 @@ func _find_nearest(x: float, z: float) -> void:
 
 # Signed distance to the shoreline: negative on land, positive out at sea
 func _shore_distance(x: float, z: float) -> float:
+	if island_radius > 0.0:
+		var p := Vector2(x, z) - island_center
+		return p.length() - _island_r(p)
 	return (Vector2(x, z) - _road_center).dot(coast_direction.normalized()) - coast_offset
 
 
@@ -392,10 +424,11 @@ func _build_terrain() -> void:
 				var layer := floorf(peaks / terrace_step)
 				peaks = (layer + smoothstep(0.75, 1.0, peaks / terrace_step - layer)) * terrace_step
 			nat += peaks
+			nat += _volcano(x, z, noise)
 			if sea_enabled:
 				# land slopes down to a shallow lagoon (about 1.5 m deep, where the water is turquoise), then the open sea
 				var shore := _shore_distance(x, z)
-				nat = lerpf(nat, sea_level - 1.5, smoothstep(-45.0, 0.0, shore))
+				nat = lerpf(nat, sea_level - lagoon_depth, smoothstep(-45.0, 0.0, shore))
 				nat = lerpf(nat, sea_level - 25.0, smoothstep(60.0, 160.0, shore))
 			if lake_radius > 0.0:
 				# flat shore 1 m above the lake all around it, easing back into the hills further out (the road is laid
@@ -440,8 +473,10 @@ func _build_terrain() -> void:
 			normals[i] = normal
 			var c: Color = pal.ground.lerp(pal.ground_alt, clampf(noise.get_noise_2d(x * 3.0, z * 3.0) * 0.5 + 0.5, 0.0, 1.0))
 			c = c.lerp(pal.steep, smoothstep(0.75, 0.55, normal.y))
+			if volcano_height > 0.0:
+				c = c.lerp(pal.get("volcanic", pal.steep), smoothstep(volcano_height * 0.3, volcano_height * 0.5, _heights[i]))
 			if sea_enabled:
-				c = c.lerp(pal.beach, 1.0 - smoothstep(sea_level + 1.0, sea_level + 4.0, _heights[i]))
+				c = c.lerp(pal.beach, 1.0 - smoothstep(sea_level + 1.0, sea_level + 1.0 + beach_height, _heights[i]))
 			c = c.lerp(pal.beach, _pond_bank(x, z, _heights[i]))
 			c = c.lerp(pal.verge, 1.0 - smoothstep(road_half, road_half + 6.0, near_road[i]))
 			colors[i] = c
@@ -549,6 +584,9 @@ func _build_road_mesh() -> void:
 		mat.set_shader_parameter("dirt_color", Color(0.55, 0.55, 0.6))
 	elif biome == Biome.JUNGLE:
 		mat.set_shader_parameter("dirt_color", Color(0.5, 0.25, 0.14))
+	elif biome == Biome.ISLAND:
+		mat.set_shader_parameter("dirt_color", Color(0.45, 0.3, 0.18))
+		mat.set_shader_parameter("sand_color", Color(0.96, 0.8, 0.46))
 	mesh.surface_set_material(0, mat)
 	_add_static_mesh("Road", mesh)
 
@@ -563,6 +601,8 @@ func _surface_weights() -> PackedColorArray:
 	sand.resize(count)
 	if surface == Surface.DIRT:
 		dirt.fill(1.0)
+	elif surface == Surface.SAND:
+		sand.fill(1.0)
 	var pts := _control_points()
 	for sec in surface_sections:
 		var i := _nearest_sample(pts[int(sec.x) % pts.size()])
@@ -996,6 +1036,8 @@ func _build_props() -> void:
 			var h := _terrain_height(x, z)
 			if sea_enabled and h < sea_level + 1.5:
 				continue
+			if h > prop.get("max_h", INF) or h < prop.get("min_h", -INF):
+				continue
 			if _in_pond(x, z, 1.15):
 				continue
 			var slope := absf(_terrain_height(x + 2.0, z) - h) + absf(_terrain_height(x, z + 2.0) - h)
@@ -1235,6 +1277,7 @@ uniform float clarity = 2.5;          // meters of water through which the sand 
 uniform float foam_width = 0.9;
 uniform float color_bands = 4.0;      // cartoon steps between shallow and deep
 uniform float wave_strength = 0.12;
+uniform float sky_reflection = 1.0;   // 0 = the water keeps its own color even at grazing angles (no sky mirrored in it)
 varying vec3 world_pos;
 
 void vertex() {
@@ -1276,8 +1319,8 @@ void fragment() {
 	ALBEDO = mix(col, foam_color, foam);
 	// low reflection + a bit of glow: the water keeps its own cartoon color instead of mirroring the sky
 	EMISSION = mix(col, foam_color, foam) * 0.35;
-	ROUGHNESS = mix(0.3, 0.9, foam);
-	SPECULAR = 0.25;
+	ROUGHNESS = mix(mix(1.0, 0.3, sky_reflection), 0.9, foam);
+	SPECULAR = 0.25 * sky_reflection;
 }
 """
 	var mat := ShaderMaterial.new()
@@ -1290,6 +1333,8 @@ void fragment() {
 
 func _build_sea() -> void:
 	var mat := _water_material(water_depth_range)
+	mat.set_shader_parameter("foam_width", sea_foam_width)
+	mat.set_shader_parameter("sky_reflection", water_reflection)
 	var plane := PlaneMesh.new()
 	plane.size = Vector2.ONE * map_size * 4.0
 	plane.material = mat
@@ -1298,9 +1343,12 @@ func _build_sea() -> void:
 	sea.mesh = plane
 	sea.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	# Only on the sea side: the land edge of the plane sits a bit inland of the shoreline, hidden under the terrain
-	var dir := coast_direction.normalized()
-	var center := _road_center + dir * (coast_offset - 40.0 + plane.size.x * 0.5)
-	sea.transform = Transform3D(Basis(Vector3.UP, atan2(dir.x, dir.y)), Vector3(center.x, sea_level, center.y))
+	if island_radius > 0.0:
+		sea.position = Vector3(island_center.x, sea_level, island_center.y)
+	else:
+		var dir := coast_direction.normalized()
+		var center := _road_center + dir * (coast_offset - 40.0 + plane.size.x * 0.5)
+		sea.transform = Transform3D(Basis(Vector3.UP, atan2(dir.x, dir.y)), Vector3(center.x, sea_level, center.y))
 	_generated.add_child(sea)
 
 
@@ -1401,6 +1449,59 @@ func _in_pond(x: float, z: float, margin: float) -> bool:
 		elif d < pond.r * margin:
 			return true
 	return false
+
+
+# Island radius in the direction of p (relative to island_center): bays and headlands along the coast
+func _island_r(p: Vector2) -> float:
+	if _island_noise == null:
+		_island_noise = FastNoiseLite.new()
+		_island_noise.seed = map_seed + 11
+		_island_noise.frequency = 0.015
+		_island_noise.fractal_octaves = 3
+	var dir := p.normalized()
+	return island_radius * (1.0 + clampf(_island_noise.get_noise_2d(dir.x * 100.0, dir.y * 100.0) * 0.25, -0.08, 0.08))
+
+
+# Cone with a flat top hollowed into a crater, and gullies down its sides
+func _volcano(x: float, z: float, noise: FastNoiseLite) -> float:
+	if volcano_height <= 0.0:
+		return 0.0
+	var d := Vector2(x, z).distance_to(island_center)
+	if d >= volcano_radius:
+		return 0.0
+	var t := 1.0 - d / volcano_radius
+	var cone := minf(volcano_height * pow(t, 1.5), volcano_height * 0.85)
+	cone *= 1.0 + noise.get_noise_2d(x * 2.5, z * 2.5) * 0.18
+	cone -= volcano_height * 0.16 * (1.0 - smoothstep(volcano_radius * 0.03, volcano_radius * 0.08, d))
+	return cone
+
+
+func _build_crater_glow() -> void:
+	var r := volcano_radius * 0.06
+	var disc := CylinderMesh.new()
+	disc.top_radius = r
+	disc.bottom_radius = r
+	disc.height = 0.01
+	disc.radial_segments = 20
+	disc.rings = 1
+	var lava := StandardMaterial3D.new()
+	lava.albedo_color = Color(1.0, 0.35, 0.08)
+	lava.emission_enabled = true
+	lava.emission = Color(1.0, 0.3, 0.05)
+	lava.emission_energy_multiplier = 4.0
+	disc.material = lava
+	var glow := MeshInstance3D.new()
+	glow.name = "CraterGlow"
+	glow.mesh = disc
+	glow.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	glow.position = Vector3(island_center.x, _terrain_height(island_center.x, island_center.y) + 0.6, island_center.y)
+	_generated.add_child(glow)
+	var light := OmniLight3D.new()
+	light.light_color = Color(1.0, 0.4, 0.1)
+	light.light_energy = 3.0
+	light.omni_range = r * 3.0
+	light.position = glow.position + Vector3.UP * 4.0
+	_generated.add_child(light)
 
 
 # Lake radius in the direction of p: the nominal radius +/- 15 % with smooth bays and points, so the shore isn't a circle

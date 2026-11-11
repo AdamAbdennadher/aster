@@ -15,6 +15,7 @@ const MAPS := [
 	{"name": "DESERT", "scene": "res://scenes/maps/desert.tscn"},
 	{"name": "SNOW", "scene": "res://scenes/maps/snow.tscn"},
 	{"name": "JUNGLE", "scene": "res://scenes/maps/jungle.tscn"},
+	{"name": "ISLAND", "scene": "res://scenes/maps/island.tscn"},
 	{"name": "TRAINING", "scene": "res://scenes/maps/training.tscn"},
 ]
 
