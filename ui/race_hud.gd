@@ -3,10 +3,16 @@ extends CanvasLayer
 
 const GAUGE_MAX_KMH := 220.0
 const GAUGE_WIDTH := 150.0
+const BOOST_WIDTH := 90.0
+const BOOST_COLOR := Color(1.0, 0.82, 0.3)
 
 var _speed_box: Control
 var _speed_label: Label
 var _gauge_fill: ColorRect
+
+var _boost_box: VBoxContainer
+var _boost_label: Label
+var _boost_fill: ColorRect
 
 var _chrono_box: VBoxContainer
 var _time_label: Label
@@ -19,6 +25,7 @@ func _ready() -> void:
 	layer = 40
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	_build_speedometer()
+	_build_boost()
 	_build_chrono()
 	visible = Game.state == Game.State.PLAYING
 	Game.state_changed.connect(func(s): visible = s == Game.State.PLAYING)
@@ -65,6 +72,38 @@ func _build_speedometer() -> void:
 	track.add_child(_gauge_fill)
 
 
+# Boost gauge, bottom right: a small label above a thin yellow line that fills while drifting
+func _build_boost() -> void:
+	_boost_box = VBoxContainer.new()
+	_boost_box.anchor_left = 1.0
+	_boost_box.anchor_right = 1.0
+	_boost_box.anchor_top = 1.0
+	_boost_box.anchor_bottom = 1.0
+	_boost_box.offset_left = -14 - BOOST_WIDTH
+	_boost_box.offset_right = -14
+	_boost_box.offset_top = -40
+	_boost_box.offset_bottom = -14
+	_boost_box.alignment = BoxContainer.ALIGNMENT_END
+	_boost_box.add_theme_constant_override("separation", 3)
+	_boost_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(_boost_box)
+
+	_boost_label = Label.new()
+	_boost_label.text = "boost"
+	_boost_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	_boost_label.label_settings = UIStyle.label(8, UIStyle.DIM, 0.0, 400, 2)
+	_boost_box.add_child(_boost_label)
+
+	var track := ColorRect.new()
+	track.color = Color(BOOST_COLOR, 0.2)
+	track.custom_minimum_size = Vector2(BOOST_WIDTH, 2)
+	_boost_box.add_child(track)
+	_boost_fill = ColorRect.new()
+	_boost_fill.color = BOOST_COLOR
+	_boost_fill.size = Vector2(0, 2)
+	track.add_child(_boost_fill)
+
+
 func _build_chrono() -> void:
 	_chrono_box = VBoxContainer.new()
 	_chrono_box.anchor_left = 1.0
@@ -96,10 +135,15 @@ func _process(_delta: float) -> void:
 		return
 	var car := get_tree().get_first_node_in_group("player_car") as VehicleBody3D
 	_speed_box.visible = car != null
+	_boost_box.visible = car != null
 	if car:
 		var kmh: float = car.linear_velocity.length() * 3.6
 		_speed_label.text = "%d" % roundi(kmh)
 		_gauge_fill.size.x = GAUGE_WIDTH * clampf(kmh / GAUGE_MAX_KMH, 0.0, 1.0)
+		var boost_car: Node = car   # untyped access: the boost fields come from car.gd, not VehicleBody3D
+		_boost_fill.size.x = BOOST_WIDTH * float(boost_car.get("boost_meter"))
+		# label lights up yellow when there is boost to use
+		_boost_label.label_settings.font_color = BOOST_COLOR if boost_car.get("boost_ready") else UIStyle.DIM
 
 	var race = Game.race
 	_chrono_box.visible = is_instance_valid(race)

@@ -965,7 +965,7 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.056, 0.39175773)
 top_level = true
 
 [node name="Camera3D" type="Camera3D" parent="Car/CameraPivot" unique_id=1076066352]
-transform = Transform3D(-0.9999999, 0.0001004848, -0.0006018871, -6.055418e-09, 0.986347, 0.16468027, 0.00061021745, 0.16468024, -0.98634684, 0.006021738, 0.96542114, -3.9392612)
+transform = Transform3D(-0.9999999, 0.0001004848, -0.0006018871, -6.055418e-09, 0.986347, 0.16468027, 0.00061021745, 0.16468024, -0.98634684, 0.006021738, 1.2259026, -3.9392612)
 
 [node name="TireFX" type="Node3D" parent="Car" unique_id=1493877193]
 script = ExtResource("tirefx_script")

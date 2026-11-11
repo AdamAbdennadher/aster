@@ -1,4 +1,4 @@
-[gd_scene format=3 uid="uid://b8s7gvmqt3cqj"]
+[gd_scene format=3 uid="uid://4l72344uj2ps"]
 
 [ext_resource type="PackedScene" uid="uid://bydo03yuwv03w" path="res://scenes/CarModel.tscn" id="1_37kl0"]
 [ext_resource type="Shader" uid="uid://10x2qtwltv87" path="res://ui/postfx.gdshader" id="postfx_shader"]

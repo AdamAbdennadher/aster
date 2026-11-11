@@ -56,6 +56,12 @@ const CAM_ROTATE_SPEED = 5.0
 @export var air_roll_damping := 4.0      ## in the air, how fast sideways rotation dies down (avoids barrel rolls off jumps)
 @export var air_roll_leveling := 3.0     ## in the air, how strongly the car rolls back to level
 
+@export_group("Boost")
+@export var boost_fill_time := 4.5        ## seconds of a good drift to fill the gauge
+@export var boost_duration := 2.5         ## seconds of boost from a full gauge
+@export var boost_accel := 14.0           ## m/s2 pushed forward while boosting
+@export var boost_max_speed_kmh := 230.0  ## no more push above this speed
+
 @export_group("Game over")
 @export var flip_tilt := 0.35             ## car up-vector dot world-up below this counts as flipped (~70 deg)
 @export var flip_time := 2.0              ## seconds stuck flipped before game over
@@ -73,6 +79,9 @@ var rear_grip_factor := 1.0
 var speed := 0.0
 var slip_angle := 0.0          # radians, negative when the rear slides out to the right
 var is_drifting := false
+var boost_meter := 0.0         # 0..1, filled by drifting
+var boost_ready := false       # true while there is boost in the gauge
+var is_boosting := false
 var last_speed := 0.0
 var throttle_input := 0.0
 var _flipped_time := 0.0
@@ -86,6 +95,7 @@ var _wheel_visuals: Array = []   # [wheel, mesh, mesh rest transform]
 
 func _ready() -> void:
 	add_to_group("player_car")
+	add_child(load("res://scripts/car/boost_fx.gd").new())
 	Game.state_changed.connect(_on_game_state)
 	_on_game_state(Game.state)
 	spawn_transform = global_transform
@@ -152,6 +162,7 @@ func _physics_process(delta: float) -> void:
 	_apply_bump_stops()
 	if not is_on_ground():
 		_stabilize_in_air(delta)
+	_update_boost(delta, playing)
 	if playing:
 		_check_flipped(delta)
 	update_camera(delta)
@@ -176,6 +187,21 @@ func _on_game_state(state: Game.State) -> void:
 
 # Bump stops: when a wheel gets close to the top of its arch (suspension fully compressed), push the body up
 # at that corner, so the body can never come down over the wheels further than the room left in the model.
+# Drifting fills the gauge (faster with a wider slide). Holding boost pushes the car forward as long as
+# there is something in the gauge, in any situation (straight line, drift, in the air).
+func _update_boost(delta: float, playing: bool) -> void:
+	if is_drifting and is_on_ground() and speed > drift_min_speed:
+		var amount := clampf(absf(slip_angle) / deg_to_rad(25.0), 0.3, 1.0)
+		boost_meter = minf(1.0, boost_meter + amount * delta / boost_fill_time)
+	boost_ready = boost_meter > 0.0
+	is_boosting = playing and boost_ready and Input.is_action_pressed("boost")
+	if not is_boosting:
+		return
+	boost_meter = maxf(0.0, boost_meter - delta / boost_duration)
+	if speed * 3.6 < boost_max_speed_kmh:
+		apply_central_force(global_basis.z * mass * boost_accel)
+
+
 func _apply_bump_stops() -> void:
 	var up := global_basis.y
 	var inv := global_transform.affine_inverse()
@@ -327,6 +353,9 @@ func reset_car() -> void:
 	rear_grip_factor = 1.0
 	_steer_smooth = 0.0
 	_flipped_time = 0.0
+	boost_meter = 0.0
+	boost_ready = false
+	is_boosting = false
 	# Teleport in the physics server itself: only setting the node transform can get overwritten by
 	# the physics state on the next step, and the car stays where it was
 	var rid := get_rid()

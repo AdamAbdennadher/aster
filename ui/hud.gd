@@ -5,6 +5,7 @@ extends CanvasLayer
 const KEYBOARD := [
 	["Z Q S D", "DRIVE"],
 	["SPACE", "HANDBRAKE"],
+	["SHIFT", "BOOST"],
 	["MOUSE", "CAMERA"],
 	["R", "RESET CAR"],
 	["N", "NEXT TRACK"],
@@ -14,6 +15,7 @@ const GAMEPAD := [
 	["RT", "ACCELERATE"],
 	["X", "REVERSE"],
 	["LT", "HANDBRAKE"],
+	["A", "BOOST"],
 	["L STICK", "STEER"],
 	["R STICK", "CAMERA"],
 	["Y", "RESET CAR"],
