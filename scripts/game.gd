@@ -243,7 +243,14 @@ func _load_records() -> void:
 	if cfg.load(RECORDS_FILE) != OK:
 		return
 	for key in cfg.get_section_keys("records"):
-		_records[key] = cfg.get_value("records", key, [])
+		var map: String = key
+		# records saved before the maps moved to scenes/maps/ were keyed by the old path
+		if map.count("/") == 2 and not ResourceLoader.exists(map):
+			map = "res://scenes/maps/" + map.get_file()
+		var merged: Array = _records.get(map, []) + cfg.get_value("records", key, [])
+		merged.sort()
+		merged.resize(mini(merged.size(), RECORDS_KEPT))
+		_records[map] = merged
 
 
 ## m:ss.mmm

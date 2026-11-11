@@ -21,6 +21,7 @@ config/icon="res://icon.svg"
 Game="*res://scripts/game.gd"
 Music="*res://scripts/music.gd"
 Updater="*res://scripts/updater.gd"
+Online="*res://scripts/online.gd"
 
 [display]
 

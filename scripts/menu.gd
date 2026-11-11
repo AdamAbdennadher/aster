@@ -18,6 +18,8 @@ var _time := 0.0
 var _title: Label
 var _play: Control            # holds the play and exit buttons
 var _play_button: NeonButton
+var _name_center: Control   # name entry, shown once: the first time play is pressed
+var _name_edit: LineEdit
 var _maps: Control
 var _back: Control
 var _in_select := false
@@ -71,6 +73,11 @@ func _process(delta: float) -> void:
 
 
 func _unhandled_input(event: InputEvent) -> void:
+	if _name_center.visible and event.is_action_pressed("ui_cancel"):
+		_name_center.visible = false
+		_play.visible = true
+		_play_button.grab_focus()
+		return
 	if _in_select and event.is_action_pressed("ui_cancel"):
 		_show_title()
 
@@ -130,6 +137,8 @@ func _build_ui() -> void:
 		update.text = text
 		update.disabled = true)
 
+	_build_name_entry(panel)
+
 	var list := VBoxContainer.new()
 	list.add_theme_constant_override("separation", 4)
 	for m in Game.MAPS:
@@ -186,11 +195,71 @@ func _intro() -> void:
 
 
 func _show_select() -> void:
+	if Online.player_name == "":
+		_ask_name()
+		return
 	_in_select = true
 	_maps.visible = true
 	_back.visible = true
 	_animate(true)
 	_maps.get_child(0).get_child(0).get_child(0).grab_focus()
+
+
+# Name shown next to your times on the shared leaderboard, asked only once
+func _build_name_entry(panel: Control) -> void:
+	var box := VBoxContainer.new()
+	box.add_theme_constant_override("separation", 10)
+	var prompt := Label.new()
+	prompt.text = "your name"
+	prompt.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	prompt.label_settings = UIStyle.label(11, UIStyle.DIM, 0.0, 400, 2)
+	box.add_child(prompt)
+
+	_name_edit = LineEdit.new()
+	_name_edit.max_length = 16
+	_name_edit.custom_minimum_size = Vector2(150, 0)
+	_name_edit.alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_name_edit.add_theme_font_override("font", UIStyle.font(300, 2))
+	_name_edit.add_theme_font_size_override("font_size", 16)
+	_name_edit.add_theme_color_override("font_color", UIStyle.WHITE)
+	_name_edit.add_theme_color_override("caret_color", UIStyle.WHITE)
+	var field := StyleBoxFlat.new()
+	field.bg_color = Color(1, 1, 1, 0.04)
+	field.border_color = Color(UIStyle.WHITE, 0.35)
+	field.set_border_width_all(1)
+	field.set_corner_radius_all(2)
+	field.content_margin_top = 3
+	field.content_margin_bottom = 3
+	for state in ["normal", "focus", "read_only"]:
+		_name_edit.add_theme_stylebox_override(state, field)
+	_name_edit.text_submitted.connect(_confirm_name)
+	box.add_child(_name_edit)
+
+	var ok := NeonButton.new()
+	ok.text = "ok"
+	ok.text_size = 13
+	ok.pressed.connect(func(): _confirm_name(_name_edit.text))
+	var ok_center := CenterContainer.new()
+	ok_center.add_child(ok)
+	box.add_child(ok_center)
+
+	_name_center = _centered(panel, box, 180)
+	_name_center.visible = false
+
+
+func _ask_name() -> void:
+	_play.visible = false
+	_name_center.visible = true
+	_name_edit.grab_focus()
+
+
+func _confirm_name(text: String) -> void:
+	if text.strip_edges() == "":
+		return
+	Online.set_player_name(text)
+	_name_center.visible = false
+	_play.visible = true
+	_show_select()
 
 
 func _show_title() -> void:

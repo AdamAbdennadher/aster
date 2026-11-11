@@ -7,7 +7,9 @@ const VOLUMES := [["master", "Master"], ["music", "Music"], ["engine", "Engine"]
 var _root: Control
 var _main: VBoxContainer
 var _maps: VBoxContainer
-var _records: VBoxContainer
+var _leaderboard: Control
+var _leaderboard_scroll: ScrollContainer
+var _leaderboard_rows: VBoxContainer
 var _settings: VBoxContainer
 var _opened_from: Control      # button to focus again when coming back to the main panel
 
@@ -37,10 +39,9 @@ func _ready() -> void:
 	var change_map := _button("change map", Callable())
 	change_map.get_child(0).pressed.connect(_open.bind(_get_maps, change_map))
 	_main.add_child(change_map)
-	if is_instance_valid(Game.race):
-		var records := _button("records", Callable())
-		records.get_child(0).pressed.connect(_open.bind(_get_records, records))
-		_main.add_child(records)
+	var leaderboard := _button("leaderboard", Callable())
+	leaderboard.get_child(0).pressed.connect(_open.bind(_get_leaderboard, leaderboard))
+	_main.add_child(leaderboard)
 	var settings := _button("settings", Callable())
 	settings.get_child(0).pressed.connect(_open.bind(_get_settings, settings))
 	_main.add_child(settings)
@@ -55,38 +56,7 @@ func _ready() -> void:
 	_maps.add_child(_button("back", _show_main, 11))
 	_maps.visible = false
 
-	_records = _column()
-	_records.add_child(_title("records"))
-	var map_name := Label.new()
-	map_name.text = Game.current_map.get_file().get_basename().to_lower()
-	map_name.label_settings = UIStyle.label(10, UIStyle.DIM, 0.0, 400, 3)
-	map_name.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_records.add_child(map_name)
-	_records.add_child(_gap(14))
-	var times := Game.get_records(Game.current_map)
-	if times.is_empty():
-		var none := Label.new()
-		none.text = "no lap yet"
-		none.label_settings = UIStyle.label(12, UIStyle.DIM, 0.0, 300, 2)
-		none.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		_records.add_child(none)
-	for rank in times.size():
-		var row := HBoxContainer.new()
-		row.alignment = BoxContainer.ALIGNMENT_CENTER
-		row.add_theme_constant_override("separation", 24)
-		var place := Label.new()
-		place.text = str(rank + 1)
-		place.custom_minimum_size = Vector2(16, 0)
-		place.label_settings = UIStyle.label(12, UIStyle.DIM, 0.0, 400, 1)
-		row.add_child(place)
-		var time := Label.new()
-		time.text = Game.format_time(times[rank])
-		time.label_settings = UIStyle.label(14, UIStyle.WHITE if rank == 0 else UIStyle.DIM, 0.0, 300, 2)
-		row.add_child(time)
-		_records.add_child(row)
-	_records.add_child(_gap(14))
-	_records.add_child(_button("back", _show_main, 11))
-	_records.visible = false
+	_build_leaderboard()
 
 	_settings = _column()
 	_settings.add_child(_title("settings"))
@@ -105,9 +75,13 @@ func _ready() -> void:
 
 
 func _unhandled_input(event: InputEvent) -> void:
+	if _leaderboard.visible and (event.is_action_pressed("ui_down") or event.is_action_pressed("ui_up")):
+		_leaderboard_scroll.scroll_vertical += 40 if event.is_action_pressed("ui_down") else -40
+		get_viewport().set_input_as_handled()
+		return
 	if event.is_action_pressed("pause") or event.is_action_pressed("ui_cancel"):
 		get_viewport().set_input_as_handled()
-		if _settings.visible or _maps.visible or _records.visible:
+		if _settings.visible or _maps.visible or _leaderboard.visible:
 			_show_main()
 		else:
 			Game.resume()
@@ -169,8 +143,107 @@ func _get_maps() -> Control:
 	return _maps
 
 
-func _get_records() -> Control:
-	return _records
+func _get_leaderboard() -> Control:
+	_set_leaderboard_message("")
+	_leaderboard_scroll.scroll_vertical = 0
+	Online.fetch_leaderboard()
+	return _leaderboard
+
+
+# Full-screen page: title at the top, then a scrolling list (each map, then its ranking), back at the bottom
+func _build_leaderboard() -> void:
+	_leaderboard = Control.new()
+	_leaderboard.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_leaderboard.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_root.add_child(_leaderboard)
+
+	var title := _title("leaderboard")
+	title.set_anchors_preset(Control.PRESET_TOP_WIDE)
+	title.offset_top = 18
+	_leaderboard.add_child(title)
+
+	_leaderboard_scroll = ScrollContainer.new()
+	_leaderboard_scroll.anchor_left = 0.5
+	_leaderboard_scroll.anchor_right = 0.5
+	_leaderboard_scroll.anchor_bottom = 1.0
+	_leaderboard_scroll.offset_left = -140
+	_leaderboard_scroll.offset_right = 140
+	_leaderboard_scroll.offset_top = 76
+	_leaderboard_scroll.offset_bottom = -44
+	_leaderboard_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	_leaderboard_scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_SHOW_NEVER
+	_leaderboard.add_child(_leaderboard_scroll)
+	_leaderboard_rows = VBoxContainer.new()
+	_leaderboard_rows.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_leaderboard_rows.add_theme_constant_override("separation", 3)
+	_leaderboard_scroll.add_child(_leaderboard_rows)
+
+	var back := _button("back", _show_main, 11)
+	back.set_anchors_preset(Control.PRESET_BOTTOM_WIDE)
+	back.offset_top = -34
+	back.offset_bottom = -14
+	_leaderboard.add_child(back)
+
+	_leaderboard.visible = false
+	Online.leaderboard_loaded.connect(_on_leaderboard_loaded)
+
+
+func _set_leaderboard_message(text: String) -> void:
+	for child in _leaderboard_rows.get_children():
+		child.queue_free()
+	if text == "":
+		return
+	var l := Label.new()
+	l.text = text
+	l.label_settings = UIStyle.label(12, UIStyle.DIM, 0.0, 300, 2)
+	l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_leaderboard_rows.add_child(l)
+
+
+func _on_leaderboard_loaded(rows) -> void:
+	if rows == null:
+		_set_leaderboard_message("can't reach the leaderboard")
+		return
+	_set_leaderboard_message("")
+	for m in Game.MAPS:
+		var map_id := Online.map_id(m.scene)
+		var times: Array = rows.filter(func(r): return r.get("map", "") == map_id)
+		times.sort_custom(func(a, b): return int(a.get("time_ms", 0)) < int(b.get("time_ms", 0)))
+
+		var header := Label.new()
+		header.text = m.name.to_lower()
+		header.label_settings = UIStyle.label(14, UIStyle.WHITE, 0.0, 300, 3)
+		_leaderboard_rows.add_child(header)
+		if times.is_empty():
+			_leaderboard_rows.add_child(_leaderboard_line("", "no time yet", "", false))
+		for i in times.size():
+			var r: Dictionary = times[i]
+			_leaderboard_rows.add_child(_leaderboard_line(str(i + 1), str(r.get("player_name", "?")).to_lower(),
+				Game.format_time(float(r.get("time_ms", 0)) / 1000.0), r.get("player_id", "") == Online.player_id))
+		_leaderboard_rows.add_child(_gap(12))
+
+
+func _leaderboard_line(place: String, player: String, time: String, mine: bool) -> Control:
+	var color := UIStyle.WHITE if mine else UIStyle.DIM
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 10)
+	row.add_child(_gap(6))
+	var place_label := Label.new()
+	place_label.text = place
+	place_label.custom_minimum_size = Vector2(14, 0)
+	place_label.label_settings = UIStyle.label(10, UIStyle.DIM, 0.0, 400, 1)
+	row.add_child(place_label)
+	var player_label := Label.new()
+	player_label.text = player
+	player_label.clip_text = true
+	player_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	player_label.label_settings = UIStyle.label(11, color, 0.0, 400, 2)
+	row.add_child(player_label)
+	var time_label := Label.new()
+	time_label.text = time
+	time_label.label_settings = UIStyle.label(11, color, 0.0, 300, 2)
+	row.add_child(time_label)
+	return row
 
 
 func _get_settings() -> Control:
@@ -201,9 +274,9 @@ func _first_focusable(node: Node) -> Control:
 
 
 func _show_main() -> void:
+	_leaderboard.visible = false
 	_settings.visible = false
 	_maps.visible = false
-	_records.visible = false
 	_main.visible = true
 	if _opened_from:
 		_opened_from.get_child(0).grab_focus()
