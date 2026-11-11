@@ -80,3 +80,25 @@ static func _dot(radius: int, color: Color) -> Texture2D:
 			var d := Vector2(x + 0.5, y + 0.5).distance_to(c)
 			img.set_pixel(x, y, Color(color, clampf(radius + 0.5 - d, 0.0, 1.0)))
 	return ImageTexture.create_from_image(img)
+
+
+## Text field in the menu style (thin outline, centered white text), used for the player name
+static func line_edit(size := 16) -> LineEdit:
+	var e := LineEdit.new()
+	e.max_length = 16
+	e.custom_minimum_size = Vector2(150, 0)
+	e.alignment = HORIZONTAL_ALIGNMENT_CENTER
+	e.add_theme_font_override("font", font(300, 2))
+	e.add_theme_font_size_override("font_size", size)
+	e.add_theme_color_override("font_color", WHITE)
+	e.add_theme_color_override("caret_color", WHITE)
+	var field := StyleBoxFlat.new()
+	field.bg_color = Color(1, 1, 1, 0.04)
+	field.border_color = Color(WHITE, 0.35)
+	field.set_border_width_all(1)
+	field.set_corner_radius_all(2)
+	field.content_margin_top = 3
+	field.content_margin_bottom = 3
+	for state in ["normal", "focus", "read_only"]:
+		e.add_theme_stylebox_override(state, field)
+	return e

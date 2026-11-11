@@ -10,6 +10,9 @@ var _maps: VBoxContainer
 var _leaderboard: Control
 var _leaderboard_scroll: ScrollContainer
 var _leaderboard_rows: VBoxContainer
+var _name_panel: VBoxContainer
+var _name_button: Control
+var _name_field: LineEdit
 var _settings: VBoxContainer
 var _opened_from: Control      # button to focus again when coming back to the main panel
 
@@ -65,9 +68,14 @@ func _ready() -> void:
 		_settings.add_child(_volume_row(v[0], v[1]))
 	_settings.add_child(_gap(10))
 	_build_display_rows()
+	_settings.add_child(_gap(10))
+	_name_button = _button(_name_button_text(), _show_name_panel, 13)
+	_settings.add_child(_name_button)
 	_settings.add_child(_gap(14))
 	_settings.add_child(_button("back", _show_main, 11))
 	_settings.visible = false
+
+	_build_name_panel()
 
 	_root.modulate.a = 0.0
 	create_tween().tween_property(_root, "modulate:a", 1.0, 0.25)
@@ -81,7 +89,9 @@ func _unhandled_input(event: InputEvent) -> void:
 		return
 	if event.is_action_pressed("pause") or event.is_action_pressed("ui_cancel"):
 		get_viewport().set_input_as_handled()
-		if _settings.visible or _maps.visible or _leaderboard.visible:
+		if _name_panel.visible:
+			_back_to_settings()
+		elif _settings.visible or _maps.visible or _leaderboard.visible:
 			_show_main()
 		else:
 			Game.resume()
@@ -273,7 +283,49 @@ func _first_focusable(node: Node) -> Control:
 	return null
 
 
+func _name_button_text() -> String:
+	return "name  ·  " + Online.player_name if Online.player_name != "" else "name"
+
+
+func _build_name_panel() -> void:
+	_name_panel = _column()
+	_name_panel.add_child(_title("name"))
+	_name_panel.add_child(_gap(14))
+	_name_field = UIStyle.line_edit()
+	_name_field.text_submitted.connect(_confirm_name)
+	var center := CenterContainer.new()
+	center.add_child(_name_field)
+	_name_panel.add_child(center)
+	_name_panel.add_child(_gap(10))
+	_name_panel.add_child(_button("ok", func(): _confirm_name(_name_field.text), 13))
+	_name_panel.add_child(_button("back", _back_to_settings, 11))
+	_name_panel.visible = false
+
+
+func _show_name_panel() -> void:
+	_settings.visible = false
+	_name_panel.visible = true
+	_name_field.text = Online.player_name
+	_name_field.grab_focus()
+	_name_field.select_all()
+
+
+func _confirm_name(text: String) -> void:
+	if text.strip_edges() == "":
+		return
+	Online.set_player_name(text)
+	_name_button.get_child(0).text = _name_button_text()
+	_back_to_settings()
+
+
+func _back_to_settings() -> void:
+	_name_panel.visible = false
+	_settings.visible = true
+	_name_button.get_child(0).grab_focus()
+
+
 func _show_main() -> void:
+	_name_panel.visible = false
 	_leaderboard.visible = false
 	_settings.visible = false
 	_maps.visible = false

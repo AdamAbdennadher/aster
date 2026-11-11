@@ -20,10 +20,16 @@ create policy "anyone can add a time" on public.lap_times
 
 grant select, insert on public.lap_times to anon;
 
--- best time of each player on each map
+-- best time of each player on each map, shown under the player's latest name
 create view public.leaderboard with (security_invoker = on) as
-  select distinct on (player_id, map) player_id, player_name, map, time_ms, created_at
-  from public.lap_times
-  order by player_id, map, time_ms asc, created_at asc;
+  select distinct on (t.player_id, t.map) t.player_id, latest.player_name, t.map, t.time_ms, t.created_at
+  from public.lap_times t
+  cross join lateral (
+    select l.player_name from public.lap_times l
+    where l.player_id = t.player_id
+    order by l.created_at desc
+    limit 1
+  ) latest
+  order by t.player_id, t.map, t.time_ms asc, t.created_at asc;
 
 grant select on public.leaderboard to anon;

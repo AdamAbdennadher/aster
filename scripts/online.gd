@@ -36,6 +36,8 @@ func is_configured() -> bool:
 
 func set_player_name(new_name: String) -> void:
 	player_name = new_name.strip_edges().left(16)
+	# resend every best under this name: the leaderboard shows the name of each player's latest upload
+	_uploaded = {}
 	_save()
 	sync_local_bests()
 

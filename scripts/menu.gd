@@ -215,23 +215,7 @@ func _build_name_entry(panel: Control) -> void:
 	prompt.label_settings = UIStyle.label(11, UIStyle.DIM, 0.0, 400, 2)
 	box.add_child(prompt)
 
-	_name_edit = LineEdit.new()
-	_name_edit.max_length = 16
-	_name_edit.custom_minimum_size = Vector2(150, 0)
-	_name_edit.alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_name_edit.add_theme_font_override("font", UIStyle.font(300, 2))
-	_name_edit.add_theme_font_size_override("font_size", 16)
-	_name_edit.add_theme_color_override("font_color", UIStyle.WHITE)
-	_name_edit.add_theme_color_override("caret_color", UIStyle.WHITE)
-	var field := StyleBoxFlat.new()
-	field.bg_color = Color(1, 1, 1, 0.04)
-	field.border_color = Color(UIStyle.WHITE, 0.35)
-	field.set_border_width_all(1)
-	field.set_corner_radius_all(2)
-	field.content_margin_top = 3
-	field.content_margin_bottom = 3
-	for state in ["normal", "focus", "read_only"]:
-		_name_edit.add_theme_stylebox_override(state, field)
+	_name_edit = UIStyle.line_edit()
 	_name_edit.text_submitted.connect(_confirm_name)
 	box.add_child(_name_edit)
 
