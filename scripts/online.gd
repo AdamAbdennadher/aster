@@ -28,6 +28,8 @@ func _ready() -> void:
 		_save()
 	Game.lap_completed.connect(_on_lap_completed)
 	sync_local_bests()
+	if is_configured() and player_name != "":
+		fetch_leaderboard()
 
 
 func is_configured() -> bool:
@@ -79,7 +81,27 @@ func fetch_leaderboard() -> void:
 	sync_local_bests()
 	var query := "/rest/v1/leaderboard?select=player_id,player_name,map,time_ms&order=time_ms.asc&limit=1000"
 	_request(query, HTTPClient.METHOD_GET, "", [], func(ok: bool, data):
+		if ok and data is Array:
+			_restore_missing_bests(data)
 		leaderboard_loaded.emit(data if ok and data is Array else null))
+
+
+# A personal best that is not (or no longer) on the leaderboard, e.g. rows deleted by hand, is sent again
+func _restore_missing_bests(rows: Array) -> void:
+	if player_name == "":
+		return
+	for m in Game.MAPS:
+		var best: float = Game.best_time(m.scene)
+		if best == INF:
+			continue
+		var id := map_id(m.scene)
+		var online := 1 << 30
+		for r in rows:
+			if r.get("map", "") == id and r.get("player_id", "") == player_id:
+				online = int(r.get("time_ms", online))
+		if int(round(best * 1000.0)) < online:
+			_uploaded.erase(id)
+			submit_time(m.scene, best)
 
 
 func _on_lap_completed(time: float, rank: int, _previous_best: float) -> void:
