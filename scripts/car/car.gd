@@ -34,6 +34,8 @@ const CAM_ROTATE_SPEED = 5.0
 ## Kicking the rear out without the handbrake: full lock with throttle held for kick_hold_time, or a quick
 ## steering flick (full lock one way then the other) which kicks right away and harder
 @export var kick_min_speed_kmh := 40.0
+@export var kick_min_speed_coast_kmh := 70.0   ## same without throttle: above this speed the rear can still be kicked out and keeps sliding
+@export var coast_drift_looseness := 0.7       ## how loose the rear gets in a drift without throttle (0 = full grip, 1 = like full throttle)
 @export var kick_steer := 0.85
 @export var kick_hold_time := 0.18
 @export var kick_yaw := 1.3                ## rad/s added to the rotation when the rear kicks out
@@ -73,6 +75,10 @@ const CAM_ROTATE_SPEED = 5.0
 @export var boost_accel := 14.0           ## m/s2 pushed forward while boosting
 @export var boost_max_speed_kmh := 230.0  ## no more push above this speed
 
+@export_group("Lights")
+@export var drift_light_boost := 4.0     ## red rear light brightness while the handbrake is held (1 = normal)
+@export var drift_light_speed := 14.0    ## how fast it brightens and dims back
+
 @export_group("Game over")
 @export var flip_tilt := 0.35             ## car up-vector dot world-up below this counts as flipped (~70 deg)
 @export var flip_time := 2.0              ## seconds stuck flipped before game over
@@ -104,6 +110,8 @@ var _steer_smooth := 0.0    # steering input eased in over time, so taps and hol
 var _wheel_visuals: Array = []   # [wheel, mesh, mesh rest transform]
 var _hit_cooldown := 0.0   # seconds left during which the arcade assists leave the physics alone after hitting something
 var _hold_still := true   # parked after the spawn or a reset until the player touches a control: no rolling down slopes
+var _tail_light: StandardMaterial3D
+var _tail_base_energy := 1.0
 var _kick_hold := 0.0
 var _kick_left := 0.0       # seconds left in the current kick
 var _kick_rate := 0.0       # signed rad/s added per second of kick
@@ -116,6 +124,9 @@ func _ready() -> void:
 	contact_monitor = true
 	max_contacts_reported = 6
 	add_child(load("res://scripts/car/boost_fx.gd").new())
+	_tail_light = load("res://models/car/materials/Matériau.003.tres")
+	if _tail_light:
+		_tail_base_energy = _tail_light.emission_energy_multiplier
 	Game.state_changed.connect(_on_game_state)
 	_on_game_state(Game.state)
 	spawn_transform = global_transform
@@ -157,13 +168,14 @@ func _physics_process(delta: float) -> void:
 		# the slide right after a crash comes from the impact: it must not switch the car into drift mode
 		is_drifting = handbrake or (is_drifting and still_sliding)
 	else:
-		is_drifting = handbrake or kicked or (throttle > 0.1 and (sliding or (is_drifting and still_sliding)))
+		is_drifting = handbrake or kicked or ((throttle > 0.1 or speed * 3.6 > kick_min_speed_coast_kmh) and (sliding or (is_drifting and still_sliding)))
 
 	var target_grip := 1.0
 	if handbrake:
 		target_grip = handbrake_grip
 	elif is_drifting:
-		target_grip = lerpf(1.0, drift_grip, throttle)
+		var coasting := coast_drift_looseness if speed * 3.6 > kick_min_speed_coast_kmh else 0.0
+		target_grip = lerpf(1.0, drift_grip, maxf(throttle, coasting))
 	var rate := grip_loss_speed if target_grip < rear_grip_factor else grip_recovery_speed
 	rear_grip_factor = move_toward(rear_grip_factor, target_grip, rate * delta)
 	for wheel in rear_wheels:
@@ -250,7 +262,7 @@ func _power_drift_kick(steer_input: float, throttle: float, delta: float) -> boo
 			_kick_hold = 0.0
 		_last_lock_side = lock_side
 		_last_lock_time = now
-	var able := not is_drifting and _hit_cooldown <= 0.0 and is_on_ground() and throttle > 0.5 and speed * 3.6 > kick_min_speed_kmh and lock_side != 0.0
+	var able := not is_drifting and _hit_cooldown <= 0.0 and is_on_ground() and lock_side != 0.0 and (throttle > 0.5 and speed * 3.6 > kick_min_speed_kmh or speed * 3.6 > kick_min_speed_coast_kmh)
 	if not able:
 		_kick_hold = 0.0
 		return false
@@ -312,6 +324,14 @@ func _stabilize_in_air(delta: float) -> void:
 # Godot's raycast suspension draws the wheel lower than its real contact, more so as the spring compresses,
 # so wheels visibly sink into the road. Lift each wheel mesh back onto the ground, but never above its place in
 # the model (visual only, physics unchanged).
+func _process(delta: float) -> void:
+	if _tail_light == null:
+		return
+	var held := Game.state == Game.State.PLAYING and Input.is_action_pressed("handbrake")
+	var target := _tail_base_energy * (drift_light_boost if held else 1.0)
+	_tail_light.emission_energy_multiplier = lerpf(_tail_light.emission_energy_multiplier, target, clampf(drift_light_speed * delta, 0.0, 1.0))
+
+
 func _update_wheel_visuals() -> void:
 	var up := global_basis.y
 	for v in _wheel_visuals:
