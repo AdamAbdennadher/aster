@@ -3,7 +3,7 @@ extends Node3D
 ## the UI sits on the right. PLAY turns the same screen into the map select (no scene change).
 
 const IDLE_SOUND := "res://sounds/motor/motor-menu.mp3"
-const CAR_SAMPLE := 150                     # where the car is parked along the desert road
+const CAR_SAMPLE := 5                     # where the car is parked along the desert road
 const CAR_HEADING := Vector3(0.45, 0, 0.9)  # facing the sea / sunset
 
 @onready var track: Node3D = $Desert
