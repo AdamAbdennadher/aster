@@ -10,6 +10,38 @@ const SETTINGS_FILE := "user://settings.cfg"
 const RECORDS_FILE := "user://records.cfg"
 const RECORDS_KEPT := 5
 const PIXEL_ROWS := 540.0      # height of the 3D image in pixels, whatever the window size (matches postfx.gdshader)
+const TUNING_DEFAULTS := {
+	"engine_power": 300.0,
+	"max_steer": 0.8,
+	"max_steer_at_speed": 0.35,
+	"steer_speed_ref": 30.0,
+	"max_turn_rate": 2.2,
+	"turn_sharpness": 1.15,
+	"steer_time": 0.25,
+	"steer_smoothing": 5.0,
+	"drift_steer_bonus": 0.35,
+	"countersteer_assist": 0.5,
+	"front_grip_scale": 1.0,
+	"rear_grip_scale": 1.0,
+	"handbrake_grip": 0.3,
+	"handbrake_brake": 0.4,
+	"drift_grip": 0.45,
+	"grip_loss_speed": 10.0,
+	"grip_recovery_speed": 1.5,
+	"drift_min_angle_deg": 8.0,
+	"drift_keep_angle_deg": 3.0,
+	"drift_exit_time": 0.45,
+	"drift_yaw_rate": 2.0,
+	"drift_yaw_control": 6.0,
+	"drift_traction": 0.8,
+	"drift_speed_keep": 0.9,
+	"max_drift_angle_deg": 45.0,
+	"countersteer_boost": 1.6,
+	"boost_fill_time": 4.5,
+	"boost_duration": 2.5,
+	"boost_accel": 14.0,
+	"boost_max_speed_kmh": 230.0,
+}
 const MAPS := [
 	{"name": "MOUNTAIN", "scene": "res://scenes/maps/mountain.tscn"},
 	{"name": "DESERT", "scene": "res://scenes/maps/desert.tscn"},
@@ -32,6 +64,7 @@ var state := State.PLAYING:
 var current_map := ""
 var race: Node                # lap timer of the current map (race.gd), null on maps without laps
 var using_gamepad := false   # last input came from a controller (the HUD shows the matching buttons)
+var tuning := TUNING_DEFAULTS.duplicate()
 
 var _volumes := {"Master": 0.8, "Music": 0.7, "Engine": 0.8, "SFX": 0.8}
 var _records := {}           # map scene path -> best lap times (seconds), fastest first
@@ -270,6 +303,24 @@ func set_volume(bus: String, value: float) -> void:
 	_volumes[bus] = value
 	_apply_volume(bus)
 	_save_settings()
+
+
+func set_tuning(key: String, value: float) -> void:
+	if not TUNING_DEFAULTS.has(key):
+		push_error("Unknown handling tuning parameter: " + key)
+		return
+	tuning[key] = value
+	var car := get_tree().get_first_node_in_group("player_car")
+	if car:
+		car.call("apply_tuning", key, value)
+
+
+func reset_tuning() -> void:
+	tuning = TUNING_DEFAULTS.duplicate()
+	var car := get_tree().get_first_node_in_group("player_car")
+	if car:
+		for key in tuning:
+			car.call("apply_tuning", key, tuning[key])
 
 
 func _apply_volume(bus: String) -> void:

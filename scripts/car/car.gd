@@ -29,6 +29,7 @@ const CAM_ROTATE_SPEED = 5.0
 @export var drift_min_angle_deg := 8.0    ## sliding this much with throttle on switches to drift mode (the handbrake always does)
 @export var drift_keep_angle_deg := 3.0   ## once drifting, the drift goes on until the slide drops below this (so it does not cut out right after the handbrake)
 @export var drift_min_speed := 5.0        ## m/s
+@export var drift_exit_time := 0.45       ## keeps drift assistance active while rear grip recovers after a drift
 
 @export_group("Power drift")
 ## Kicking the rear out without the handbrake: full lock with throttle held for kick_hold_time, or a quick
@@ -59,6 +60,8 @@ const CAM_ROTATE_SPEED = 5.0
 @export var camera_pitch_max := 0.6
 
 @export_group("Wheels")
+@export var front_grip_scale := 1.0
+@export var rear_grip_scale := 1.0
 @export var wheel_model_height := -0.335   ## car-local height of the wheel centers in the model: wheels never go higher (no clipping into the body)
 @export var bump_stop_margin := 0.015      ## the bump stop starts pushing this far below the wheel arch
 @export var bump_stop_strength := 500.0
@@ -87,9 +90,11 @@ signal car_reset   # R pressed (or fell in the sea): the car is back at the spaw
 
 @onready var camera_pivot: Node3D = $CameraPivot
 @onready var camera_3d: Camera3D = $CameraPivot/Camera3D
+@onready var front_wheels: Array[VehicleWheel3D] = [$FL, $FR]
 @onready var rear_wheels: Array[VehicleWheel3D] = [$BL, $BR]
 
 var spawn_transform: Transform3D
+var front_base_grip := 1.0
 var rear_base_grip := 1.0
 var rear_grip_factor := 1.0
 
@@ -107,6 +112,8 @@ var _cam_yaw := 0.0          # player offset around the car (mouse / right stick
 var _cam_pitch := 0.0
 var _cam_idle := 0.0
 var _steer_smooth := 0.0    # steering input eased in over time, so taps and holds stay gradual
+var _steer_limit := 0.5
+var _drift_exit_left := 0.0
 var _wheel_visuals: Array = []   # [wheel, mesh, mesh rest transform]
 var _hit_cooldown := 0.0   # seconds left during which the arcade assists leave the physics alone after hitting something
 var _hold_still := true   # parked after the spawn or a reset until the player touches a control: no rolling down slopes
@@ -130,12 +137,56 @@ func _ready() -> void:
 	Game.state_changed.connect(_on_game_state)
 	_on_game_state(Game.state)
 	spawn_transform = global_transform
+	front_base_grip = front_wheels[0].wheel_friction_slip
 	rear_base_grip = rear_wheels[0].wheel_friction_slip
+	for key in Game.tuning:
+		apply_tuning(key, float(Game.tuning[key]))
 	for wheel in [$FL, $FR, $BL, $BR]:
 		for child in wheel.get_children():
 			if child is MeshInstance3D:
 				_wheel_visuals.append([wheel, child, child.transform])
 	snap_camera()
+
+
+func apply_tuning(key: String, value: float) -> void:
+	match key:
+		"engine_power": engine_power = value
+		"max_steer": max_steer = value
+		"max_steer_at_speed": max_steer_at_speed = value
+		"steer_speed_ref": steer_speed_ref = value
+		"max_turn_rate": max_turn_rate = value
+		"turn_sharpness": turn_sharpness = value
+		"steer_time": steer_time = value
+		"steer_smoothing": steer_smoothing = value
+		"drift_steer_bonus": drift_steer_bonus = value
+		"countersteer_assist": countersteer_assist = value
+		"front_grip_scale":
+			front_grip_scale = value
+			for wheel in front_wheels:
+				wheel.wheel_friction_slip = front_base_grip * front_grip_scale
+		"rear_grip_scale":
+			rear_grip_scale = value
+			for wheel in rear_wheels:
+				wheel.wheel_friction_slip = rear_base_grip * rear_grip_scale * rear_grip_factor
+		"handbrake_grip": handbrake_grip = value
+		"handbrake_brake": handbrake_brake = value
+		"drift_grip": drift_grip = value
+		"grip_loss_speed": grip_loss_speed = value
+		"grip_recovery_speed": grip_recovery_speed = value
+		"drift_min_angle_deg": drift_min_angle_deg = value
+		"drift_keep_angle_deg": drift_keep_angle_deg = value
+		"drift_exit_time": drift_exit_time = value
+		"drift_yaw_rate": drift_yaw_rate = value
+		"drift_yaw_control": drift_yaw_control = value
+		"drift_traction": drift_traction = value
+		"drift_speed_keep": drift_speed_keep = value
+		"max_drift_angle_deg": max_drift_angle_deg = value
+		"countersteer_boost": countersteer_boost = value
+		"boost_fill_time": boost_fill_time = value
+		"boost_duration": boost_duration = value
+		"boost_accel": boost_accel = value
+		"boost_max_speed_kmh": boost_max_speed_kmh = value
+		_: push_error("Unknown car tuning parameter: " + key)
 
 
 func _physics_process(delta: float) -> void:
@@ -164,11 +215,13 @@ func _physics_process(delta: float) -> void:
 	# two thresholds: entering a drift needs a real slide, staying in it only a small one
 	var still_sliding: bool = speed > drift_min_speed and absf(slip_angle) > deg_to_rad(drift_keep_angle_deg)
 	var kicked := _power_drift_kick(steer_input, throttle, delta)
+	var was_drifting := is_drifting
 	if _hit_cooldown > 0.0:
 		# the slide right after a crash comes from the impact: it must not switch the car into drift mode
 		is_drifting = handbrake or (is_drifting and still_sliding)
 	else:
-		is_drifting = handbrake or kicked or ((throttle > 0.1 or speed * 3.6 > kick_min_speed_coast_kmh) and (sliding or (is_drifting and still_sliding)))
+		var can_enter_drift: bool = sliding and (throttle > 0.1 or speed * 3.6 > kick_min_speed_coast_kmh)
+		is_drifting = handbrake or kicked or can_enter_drift or (is_drifting and still_sliding)
 
 	var target_grip := 1.0
 	if handbrake:
@@ -178,9 +231,18 @@ func _physics_process(delta: float) -> void:
 		target_grip = lerpf(1.0, drift_grip, maxf(throttle, coasting))
 	var rate := grip_loss_speed if target_grip < rear_grip_factor else grip_recovery_speed
 	rear_grip_factor = move_toward(rear_grip_factor, target_grip, rate * delta)
+	for wheel in front_wheels:
+		wheel.wheel_friction_slip = front_base_grip * front_grip_scale
 	for wheel in rear_wheels:
-		wheel.wheel_friction_slip = rear_base_grip * rear_grip_factor
+		wheel.wheel_friction_slip = rear_base_grip * rear_grip_scale * rear_grip_factor
 		wheel.brake = handbrake_brake if handbrake else 0.0
+	if is_drifting:
+		_drift_exit_left = drift_exit_time
+	elif was_drifting:
+		var grip_recovery_time := (1.0 - rear_grip_factor) / maxf(grip_recovery_speed, 0.01)
+		_drift_exit_left = maxf(drift_exit_time, grip_recovery_time)
+	else:
+		_drift_exit_left = maxf(0.0, _drift_exit_left - delta)
 
 	var steer_limit: float
 	if is_drifting:
@@ -193,14 +255,16 @@ func _physics_process(delta: float) -> void:
 	if sliding:
 		target_steer += slip_angle * countersteer_assist
 	target_steer = clampf(target_steer, -max_steer - drift_steer_bonus, max_steer + drift_steer_bonus)
-	steering = move_toward(steering, target_steer, steer_limit / steer_time * delta)
+	_steer_limit = steer_limit
+	var steer_rate := maxf(steer_limit, absf(steering)) / steer_time
+	steering = move_toward(steering, target_steer, steer_rate * delta)
 
 	engine_force = throttle * engine_power
 
 	# right after a hit the assists stay off, so every crash is resolved by the physics alone (same speed loss,
 	# same bounce) instead of being partly undone by the drift speed keeping or the trajectory correction
 	if _hit_cooldown <= 0.0:
-		if is_drifting and is_on_ground():
+		if (is_drifting or _drift_exit_left > 0.0) and is_on_ground():
 			drift_assist(_steer_smooth, handbrake, delta)
 		else:
 			_turn_assist(delta)
@@ -357,7 +421,8 @@ func _turn_assist(delta: float) -> void:
 	var up := Vector3.UP
 	var forward_speed := (global_basis.inverse() * linear_velocity).z
 	var wheelbase := absf($FL.position.z - $BL.position.z)
-	var natural := forward_speed * tan(steering) / wheelbase
+	var steer_now := clampf(steering, -_steer_limit, _steer_limit)
+	var natural := forward_speed * tan(steer_now) / wheelbase
 	# capped: right after a drift the wheels are still turned a lot, which would otherwise ask for a violent yaw
 	var cap := max_turn_rate * _speed_scale(turn_speed_falloff) * turn_sharpness
 	var desired := clampf(natural * turn_sharpness, -cap, cap)
@@ -457,6 +522,7 @@ func reset_car() -> void:
 	boost_meter = 0.0
 	boost_ready = false
 	is_boosting = false
+	_drift_exit_left = 0.0
 	# Teleport in the physics server itself: only setting the node transform can get overwritten by
 	# the physics state on the next step, and the car stays where it was
 	var rid := get_rid()

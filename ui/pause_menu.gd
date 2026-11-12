@@ -3,6 +3,38 @@ extends CanvasLayer
 ## Settings: volumes and display (mode, resolution, vsync, max fps).
 
 const VOLUMES := [["master", "Master"], ["music", "Music"], ["engine", "Engine"], ["effects", "SFX"]]
+const TUNING_CONTROLS := [
+	{"group": "engine", "key": "engine_power", "label": "acceleration", "min": 100.0, "max": 500.0, "step": 10.0, "digits": 0, "unit": ""},
+	{"group": "steering", "key": "max_steer", "label": "low-speed steering", "min": 20.0, "max": 65.0, "step": 1.0, "digits": 0, "unit": "deg", "display_scale": 57.29578},
+	{"group": "steering", "key": "max_steer_at_speed", "label": "high-speed steering", "min": 8.0, "max": 40.0, "step": 1.0, "digits": 0, "unit": "deg", "display_scale": 57.29578},
+	{"group": "steering", "key": "steer_speed_ref", "label": "speed for steering reduction", "min": 36.0, "max": 180.0, "step": 3.6, "digits": 0, "unit": "km/h", "display_scale": 3.6},
+	{"group": "steering", "key": "max_turn_rate", "label": "turn rate", "min": 0.5, "max": 4.0, "step": 0.1, "digits": 1, "unit": ""},
+	{"group": "steering", "key": "turn_sharpness", "label": "turn sharpness", "min": 1.0, "max": 1.6, "step": 0.025, "digits": 3, "unit": ""},
+	{"group": "steering", "key": "steer_time", "label": "steering response", "min": 0.1, "max": 0.6, "step": 0.025, "digits": 3, "unit": "s"},
+	{"group": "steering", "key": "steer_smoothing", "label": "steering smoothing", "min": 1.0, "max": 10.0, "step": 0.5, "digits": 1, "unit": ""},
+	{"group": "steering", "key": "drift_steer_bonus", "label": "drift steering bonus", "min": 0.0, "max": 40.0, "step": 1.0, "digits": 0, "unit": "deg", "display_scale": 57.29578},
+	{"group": "steering", "key": "countersteer_assist", "label": "countersteer assist", "min": 0.0, "max": 1.0, "step": 0.05, "digits": 2, "unit": ""},
+	{"group": "grip", "key": "front_grip_scale", "label": "front wheel grip", "min": 0.5, "max": 2.0, "step": 0.05, "digits": 2, "unit": "x"},
+	{"group": "grip", "key": "rear_grip_scale", "label": "rear wheel grip", "min": 0.5, "max": 2.0, "step": 0.05, "digits": 2, "unit": "x"},
+	{"group": "grip", "key": "handbrake_grip", "label": "handbrake grip", "min": 0.1, "max": 0.8, "step": 0.025, "digits": 3, "unit": ""},
+	{"group": "grip", "key": "handbrake_brake", "label": "handbrake braking", "min": 0.0, "max": 1.0, "step": 0.05, "digits": 2, "unit": ""},
+	{"group": "grip", "key": "drift_grip", "label": "drift grip", "min": 0.2, "max": 0.9, "step": 0.025, "digits": 3, "unit": ""},
+	{"group": "grip", "key": "grip_loss_speed", "label": "grip loss speed", "min": 1.0, "max": 20.0, "step": 0.5, "digits": 1, "unit": ""},
+	{"group": "grip", "key": "grip_recovery_speed", "label": "grip recovery speed", "min": 0.3, "max": 5.0, "step": 0.1, "digits": 1, "unit": ""},
+	{"group": "drift", "key": "drift_min_angle_deg", "label": "drift entry angle", "min": 4.0, "max": 20.0, "step": 0.5, "digits": 1, "unit": "deg"},
+	{"group": "drift", "key": "drift_keep_angle_deg", "label": "drift exit angle", "min": 1.0, "max": 10.0, "step": 0.5, "digits": 1, "unit": "deg"},
+	{"group": "drift", "key": "drift_exit_time", "label": "exit assistance time", "min": 0.1, "max": 0.8, "step": 0.025, "digits": 3, "unit": "s"},
+	{"group": "drift", "key": "drift_yaw_rate", "label": "drift rotation", "min": 0.5, "max": 4.0, "step": 0.1, "digits": 1, "unit": ""},
+	{"group": "drift", "key": "drift_yaw_control", "label": "drift yaw control", "min": 1.0, "max": 12.0, "step": 0.5, "digits": 1, "unit": ""},
+	{"group": "drift", "key": "drift_traction", "label": "drift traction", "min": 0.0, "max": 2.0, "step": 0.05, "digits": 2, "unit": ""},
+	{"group": "drift", "key": "drift_speed_keep", "label": "drift speed keep", "min": 0.0, "max": 1.0, "step": 0.05, "digits": 2, "unit": ""},
+	{"group": "drift", "key": "max_drift_angle_deg", "label": "max drift angle", "min": 20.0, "max": 60.0, "step": 1.0, "digits": 0, "unit": "deg"},
+	{"group": "drift", "key": "countersteer_boost", "label": "countersteer boost", "min": 1.0, "max": 2.5, "step": 0.1, "digits": 1, "unit": ""},
+	{"group": "boost", "key": "boost_fill_time", "label": "boost fill time", "min": 1.0, "max": 10.0, "step": 0.25, "digits": 2, "unit": "s"},
+	{"group": "boost", "key": "boost_duration", "label": "boost duration", "min": 0.5, "max": 5.0, "step": 0.1, "digits": 1, "unit": "s"},
+	{"group": "boost", "key": "boost_accel", "label": "boost acceleration", "min": 0.0, "max": 30.0, "step": 0.5, "digits": 1, "unit": ""},
+	{"group": "boost", "key": "boost_max_speed_kmh", "label": "boost speed limit", "min": 120.0, "max": 300.0, "step": 5.0, "digits": 0, "unit": "km/h"},
+]
 
 var _root: Control
 var _main: VBoxContainer
@@ -14,6 +46,8 @@ var _name_panel: VBoxContainer
 var _name_button: Control
 var _name_field: LineEdit
 var _settings: VBoxContainer
+var _tuning_panel: Control
+var _tuning_sliders: Dictionary = {}
 var _opened_from: Control      # button to focus again when coming back to the main panel
 
 
@@ -69,6 +103,10 @@ func _ready() -> void:
 	_settings.add_child(_gap(10))
 	_build_display_rows()
 	_settings.add_child(_gap(10))
+	if OS.has_feature("editor"):
+		var handling_lab := _button("handling lab", Callable(), 13)
+		handling_lab.get_child(0).pressed.connect(_open.bind(_get_tuning_panel, handling_lab))
+		_settings.add_child(handling_lab)
 	_name_button = _button(_name_button_text(), _show_name_panel, 13)
 	_settings.add_child(_name_button)
 	_settings.add_child(_gap(14))
@@ -76,6 +114,8 @@ func _ready() -> void:
 	_settings.visible = false
 
 	_build_name_panel()
+	if OS.has_feature("editor"):
+		_build_tuning_panel()
 
 	_root.modulate.a = 0.0
 	create_tween().tween_property(_root, "modulate:a", 1.0, 0.25)
@@ -91,6 +131,8 @@ func _unhandled_input(event: InputEvent) -> void:
 		get_viewport().set_input_as_handled()
 		if _name_panel.visible:
 			_back_to_settings()
+		elif _tuning_panel and _tuning_panel.visible:
+			_show_settings()
 		elif _settings.visible or _maps.visible or _leaderboard.visible:
 			_show_main()
 		else:
@@ -260,11 +302,125 @@ func _get_settings() -> Control:
 	return _settings
 
 
+func _get_tuning_panel() -> Control:
+	return _tuning_panel
+
+
+func _build_tuning_panel() -> void:
+	_tuning_panel = Control.new()
+	_tuning_panel.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_tuning_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_root.add_child(_tuning_panel)
+
+	var title := _title("handling lab")
+	title.set_anchors_preset(Control.PRESET_TOP_WIDE)
+	title.offset_top = 12
+	_tuning_panel.add_child(title)
+
+	var scroll := ScrollContainer.new()
+	scroll.anchor_left = 0.5
+	scroll.anchor_right = 0.5
+	scroll.anchor_bottom = 1.0
+	scroll.offset_left = -220
+	scroll.offset_right = 220
+	scroll.offset_top = 58
+	scroll.offset_bottom = -42
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	_tuning_panel.add_child(scroll)
+
+	var rows := VBoxContainer.new()
+	rows.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	rows.add_theme_constant_override("separation", 6)
+	scroll.add_child(rows)
+
+	var previous_group := ""
+	for config in TUNING_CONTROLS:
+		if config.group != previous_group:
+			var heading := Label.new()
+			heading.text = config.group
+			heading.label_settings = UIStyle.label(13, UIStyle.WHITE, 0.0, 400, 2)
+			rows.add_child(heading)
+			previous_group = config.group
+
+		var row := VBoxContainer.new()
+		row.add_theme_constant_override("separation", 1)
+		rows.add_child(row)
+		var label_row := HBoxContainer.new()
+		row.add_child(label_row)
+		var name := Label.new()
+		name.text = config.label
+		name.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		name.label_settings = UIStyle.label(9, UIStyle.DIM, 0.0, 400, 1)
+		label_row.add_child(name)
+		var value_label := Label.new()
+		value_label.custom_minimum_size.x = 74
+		value_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+		value_label.label_settings = UIStyle.label(9, UIStyle.WHITE, 0.0, 400, 1)
+		label_row.add_child(value_label)
+
+		var slider := HSlider.new()
+		slider.min_value = config.min
+		slider.max_value = config.max
+		slider.step = config.step
+		var display_scale: float = config.get("display_scale", 1.0)
+		slider.value = float(Game.tuning[config.key]) * display_scale
+		slider.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		slider.focus_mode = Control.FOCUS_ALL
+		UIStyle.style_slider(slider)
+		slider.value_changed.connect(_on_tuning_changed.bind(config.key, value_label, config.digits, config.unit, display_scale))
+		row.add_child(slider)
+		_tuning_sliders[config.key] = slider
+		value_label.text = _format_tuning_value(slider.value, config.digits, config.unit)
+
+	var buttons := HBoxContainer.new()
+	buttons.anchor_left = 0.5
+	buttons.anchor_right = 0.5
+	buttons.anchor_top = 1.0
+	buttons.anchor_bottom = 1.0
+	buttons.offset_left = -150
+	buttons.offset_right = 150
+	buttons.offset_top = -36
+	buttons.offset_bottom = -12
+	buttons.alignment = BoxContainer.ALIGNMENT_CENTER
+	buttons.add_theme_constant_override("separation", 24)
+	_tuning_panel.add_child(buttons)
+	buttons.add_child(_button("reset values", _reset_tuning_panel, 11))
+	buttons.add_child(_button("back", _show_settings, 11))
+	_tuning_panel.visible = false
+
+
+func _on_tuning_changed(value: float, key: String, value_label: Label, digits: int, unit: String, display_scale: float) -> void:
+	Game.set_tuning(key, value / display_scale)
+	value_label.text = _format_tuning_value(value, digits, unit)
+
+
+func _format_tuning_value(value: float, digits: int, unit: String) -> String:
+	var text := str(roundi(value)) if digits == 0 else ("%.1f" % value if digits == 1 else ("%.2f" % value if digits == 2 else "%.3f" % value))
+	return text if unit == "" else text + " " + unit
+
+
+func _reset_tuning_panel() -> void:
+	Game.reset_tuning()
+	for config in TUNING_CONTROLS:
+		var slider: HSlider = _tuning_sliders[config.key]
+		slider.value = float(Game.tuning[config.key]) * float(config.get("display_scale", 1.0))
+
+
+func _show_settings() -> void:
+	_tuning_panel.visible = false
+	_main.visible = false
+	_settings.visible = true
+	if _opened_from:
+		_opened_from.get_child(0).grab_focus()
+
+
 # Shows a sub panel and focuses its first interactive element
 func _open(panel_getter: Callable, from: Control) -> void:
 	var panel: Control = panel_getter.call()
 	_opened_from = from
 	_main.visible = false
+	if panel != _settings:
+		_settings.visible = false
 	panel.visible = true
 	for child in panel.get_children():
 		var target := _first_focusable(child)
@@ -329,6 +485,8 @@ func _show_main() -> void:
 	_leaderboard.visible = false
 	_settings.visible = false
 	_maps.visible = false
+	if _tuning_panel:
+		_tuning_panel.visible = false
 	_main.visible = true
 	if _opened_from:
 		_opened_from.get_child(0).grab_focus()
