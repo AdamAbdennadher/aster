@@ -154,7 +154,7 @@ func _process(_delta: float) -> void:
 	if not showing_result:
 		_time_label.text = Game.format_time(race.lap_time)
 		_time_label.label_settings.font_color = UIStyle.WHITE if race.running else UIStyle.DIM
-		_result_label.text = "" if race.running else "cross the line to start"
+		_result_label.text = "" if race.running else "drive to start"
 	var best: float = Game.best_time(Game.current_map)
 	var best_text := "best  " + Game.format_time(best) if best < INF else "no record yet"
 	_info_label.text = best_text + ("   ·   lap %d" % race.lap if race.running else "")

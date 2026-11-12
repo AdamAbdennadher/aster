@@ -1599,3 +1599,4 @@ func _place_car() -> void:
 	if car:
 		car.spawn_transform = car.global_transform
 		car.snap_camera()
+		car.reset_interpolation_all()

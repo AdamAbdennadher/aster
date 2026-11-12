@@ -1,8 +1,9 @@
 extends Node
-## Lap timing on a looped track (added by track.gd in game). The clock starts the first time the car crosses
-## the finish line; a lap only counts if the car went through the checkpoints at 25 %, 50 % and 75 % of the loop.
+## Lap timing on a looped track (added by track.gd in game). The clock starts with the first input after the
+## spawn or a reset (the first lap also covers the short run-up to the line); a lap only counts if the car went through the checkpoints at 25 %, 50 % and 75 % of the loop.
 
 const CHECKPOINTS := [0.25, 0.5, 0.75]
+const START_ACTIONS := ["accelerate", "brake", "steer_left", "steer_right", "handbrake", "boost"]
 
 var track: Node          # track.gd
 var line_index := 0      # road sample of the finish line
@@ -38,6 +39,11 @@ func _exit_tree() -> void:
 func _physics_process(delta: float) -> void:
 	if _car == null or Game.state != Game.State.PLAYING:
 		return
+	if not running:
+		for action in START_ACTIONS:
+			if Input.is_action_pressed(action):
+				_start()
+				break
 	if running:
 		lap_time += delta
 
@@ -60,11 +66,6 @@ func _physics_process(delta: float) -> void:
 
 func _cross_line() -> void:
 	if not running:
-		running = true
-		lap = 1
-		lap_time = 0.0
-		_passed.fill(false)
-		Game.race_started.emit()
 		return
 	if not _passed.all(func(p): return p):
 		return   # did not go around the whole loop (shortcut or reversing over the line)
@@ -74,6 +75,14 @@ func _cross_line() -> void:
 	lap += 1
 	lap_time = 0.0
 	_passed.fill(false)
+
+
+func _start() -> void:
+	running = true
+	lap = 1
+	lap_time = 0.0
+	_passed.fill(false)
+	Game.race_started.emit()
 
 
 func _reset() -> void:

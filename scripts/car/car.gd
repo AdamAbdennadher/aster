@@ -30,6 +30,17 @@ const CAM_ROTATE_SPEED = 5.0
 @export var drift_keep_angle_deg := 3.0   ## once drifting, the drift goes on until the slide drops below this (so it does not cut out right after the handbrake)
 @export var drift_min_speed := 5.0        ## m/s
 
+@export_group("Power drift")
+## Kicking the rear out without the handbrake: full lock with throttle held for kick_hold_time, or a quick
+## steering flick (full lock one way then the other) which kicks right away and harder
+@export var kick_min_speed_kmh := 40.0
+@export var kick_steer := 0.85
+@export var kick_hold_time := 0.18
+@export var kick_yaw := 1.3                ## rad/s added to the rotation when the rear kicks out
+@export var flick_yaw := 1.9
+@export var flick_window := 0.35            ## seconds between the two steering locks for it to count as a flick
+@export var kick_duration := 0.25         ## the extra rotation is spread over this time, and the car stays in drift mode meanwhile
+
 @export_group("Drift assist")
 @export var drift_yaw_rate := 2.0         ## rad/s at full steering lock
 @export var drift_yaw_control := 6.0
@@ -91,10 +102,19 @@ var _cam_pitch := 0.0
 var _cam_idle := 0.0
 var _steer_smooth := 0.0    # steering input eased in over time, so taps and holds stay gradual
 var _wheel_visuals: Array = []   # [wheel, mesh, mesh rest transform]
+var _hit_cooldown := 0.0   # seconds left during which the arcade assists leave the physics alone after hitting something
+var _hold_still := true   # parked after the spawn or a reset until the player touches a control: no rolling down slopes
+var _kick_hold := 0.0
+var _kick_left := 0.0       # seconds left in the current kick
+var _kick_rate := 0.0       # signed rad/s added per second of kick
+var _last_lock_side := 0.0
+var _last_lock_time := -10.0
 
 
 func _ready() -> void:
 	add_to_group("player_car")
+	contact_monitor = true
+	max_contacts_reported = 6
 	add_child(load("res://scripts/car/boost_fx.gd").new())
 	Game.state_changed.connect(_on_game_state)
 	_on_game_state(Game.state)
@@ -114,18 +134,30 @@ func _physics_process(delta: float) -> void:
 	var handbrake := Input.is_action_pressed("handbrake") if playing else false
 	throttle_input = throttle
 	# the handbrake flick stays instant (drift entry), everything else builds up gradually
-	if handbrake:
+	if handbrake or _kick_left > 0.0:
 		_steer_smooth = steer_input
 	else:
 		# a bit quicker in a drift so corrections and countersteer come in time, still not all-or-nothing
 		_steer_smooth = move_toward(_steer_smooth, steer_input, steer_smoothing * (1.6 if is_drifting else 1.0) * delta)
 
+	if _hold_still:
+		if playing and (absf(throttle) > 0.05 or absf(steer_input) > 0.05 or handbrake or Input.is_action_pressed("boost")):
+			_hold_still = false
+		else:
+			apply_central_impulse(-Vector3(linear_velocity.x, 0.0, linear_velocity.z) * mass)
+			apply_torque_impulse(get_inverse_inertia_tensor().inverse() * (-Vector3.UP * angular_velocity.y))
 	update_slip()
+	_update_hit_cooldown(delta)
 
 	var sliding: bool = speed > drift_min_speed and absf(slip_angle) > deg_to_rad(drift_min_angle_deg)
 	# two thresholds: entering a drift needs a real slide, staying in it only a small one
 	var still_sliding: bool = speed > drift_min_speed and absf(slip_angle) > deg_to_rad(drift_keep_angle_deg)
-	is_drifting = handbrake or (throttle > 0.1 and (sliding or (is_drifting and still_sliding)))
+	var kicked := _power_drift_kick(steer_input, throttle, delta)
+	if _hit_cooldown > 0.0:
+		# the slide right after a crash comes from the impact: it must not switch the car into drift mode
+		is_drifting = handbrake or (is_drifting and still_sliding)
+	else:
+		is_drifting = handbrake or kicked or (throttle > 0.1 and (sliding or (is_drifting and still_sliding)))
 
 	var target_grip := 1.0
 	if handbrake:
@@ -153,10 +185,13 @@ func _physics_process(delta: float) -> void:
 
 	engine_force = throttle * engine_power
 
-	if is_drifting and is_on_ground():
-		drift_assist(_steer_smooth, handbrake, delta)
-	else:
-		_turn_assist(delta)
+	# right after a hit the assists stay off, so every crash is resolved by the physics alone (same speed loss,
+	# same bounce) instead of being partly undone by the drift speed keeping or the trajectory correction
+	if _hit_cooldown <= 0.0:
+		if is_drifting and is_on_ground():
+			drift_assist(_steer_smooth, handbrake, delta)
+		else:
+			_turn_assist(delta)
 	last_speed = speed
 
 	_apply_bump_stops()
@@ -166,6 +201,7 @@ func _physics_process(delta: float) -> void:
 	if playing:
 		_check_flipped(delta)
 	update_camera(delta)
+	_update_wheel_visuals()
 
 
 # Upside down or on its side and not moving anymore for flip_time seconds: game over (R still saves you before)
@@ -185,8 +221,6 @@ func _on_game_state(state: Game.State) -> void:
 		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 
 
-# Bump stops: when a wheel gets close to the top of its arch (suspension fully compressed), push the body up
-# at that corner, so the body can never come down over the wheels further than the room left in the model.
 # Drifting fills the gauge (faster with a wider slide). Holding boost pushes the car forward as long as
 # there is something in the gauge, in any situation (straight line, drift, in the air).
 func _update_boost(delta: float, playing: bool) -> void:
@@ -202,6 +236,49 @@ func _update_boost(delta: float, playing: bool) -> void:
 		apply_central_force(global_basis.z * mass * boost_accel)
 
 
+func _power_drift_kick(steer_input: float, throttle: float, delta: float) -> bool:
+	if _kick_left > 0.0:
+		_kick_left -= delta
+		apply_torque_impulse(get_inverse_inertia_tensor().inverse() * (Vector3.UP * _kick_rate * delta))
+		return true
+	var now := Time.get_ticks_msec() / 1000.0
+	var lock_side := signf(steer_input) if absf(steer_input) > kick_steer else 0.0
+	var flick := false
+	if lock_side != 0.0:
+		flick = _last_lock_side == -lock_side and now - _last_lock_time < flick_window
+		if lock_side != _last_lock_side:
+			_kick_hold = 0.0
+		_last_lock_side = lock_side
+		_last_lock_time = now
+	var able := not is_drifting and _hit_cooldown <= 0.0 and is_on_ground() and throttle > 0.5 and speed * 3.6 > kick_min_speed_kmh and lock_side != 0.0
+	if not able:
+		_kick_hold = 0.0
+		return false
+	_kick_hold += delta
+	if not flick and _kick_hold < kick_hold_time:
+		return false
+	_kick_hold = 0.0
+	_last_lock_side = 0.0
+	_kick_left = kick_duration
+	# aims at a rotation in the new direction rather than adding a fixed amount: after a flick the car is still
+	# turning the other way, and a fixed push would only cancel that
+	var need := lock_side * (flick_yaw if flick else kick_yaw) - angular_velocity.y
+	if need * lock_side < 0.3:
+		need = lock_side * 0.3
+	_kick_rate = need / kick_duration
+	return true
+
+
+func _update_hit_cooldown(delta: float) -> void:
+	_hit_cooldown = maxf(0.0, _hit_cooldown - delta)
+	for body in get_colliding_bodies():
+		if body.name != "Road" and body.name != "Terrain":
+			_hit_cooldown = 0.35
+			return
+
+
+# Bump stops: when a wheel gets close to the top of its arch (suspension fully compressed), push the body up
+# at that corner, so the body can never come down over the wheels further than the room left in the model.
 func _apply_bump_stops() -> void:
 	var up := global_basis.y
 	var inv := global_transform.affine_inverse()
@@ -235,7 +312,7 @@ func _stabilize_in_air(delta: float) -> void:
 # Godot's raycast suspension draws the wheel lower than its real contact, more so as the spring compresses,
 # so wheels visibly sink into the road. Lift each wheel mesh back onto the ground, but never above its place in
 # the model (visual only, physics unchanged).
-func _process(_delta: float) -> void:
+func _update_wheel_visuals() -> void:
 	var up := global_basis.y
 	for v in _wheel_visuals:
 		var wheel: VehicleWheel3D = v[0]
@@ -313,9 +390,12 @@ func drift_assist(steer_input: float, handbrake: bool, delta: float) -> void:
 	var forward := Vector3(global_basis.z.x, 0.0, global_basis.z.z).normalized()
 	var angle_to_nose := flat_vel.signed_angle_to(forward, up)
 	var traction := drift_traction * (countersteer_boost if countersteering else 1.0)
+	if _kick_left > 0.0:
+		traction = 0.0   # let the rear swing out during a power drift kick
 	flat_vel = flat_vel.rotated(up, clampf(angle_to_nose, -traction * delta, traction * delta))
 
-	if not handbrake and flat_vel.length() < last_speed:
+	# only gives back the speed scrubbed by the sideways slide (a few m/s2), never a sudden loss
+	if not handbrake and flat_vel.length() < last_speed and last_speed - flat_vel.length() < 0.25:
 		flat_vel = flat_vel.normalized() * lerpf(flat_vel.length(), last_speed, drift_speed_keep)
 
 	linear_velocity = Vector3(flat_vel.x, vel.y, flat_vel.z)
@@ -327,8 +407,9 @@ func update_slip() -> void:
 	var local_vel := global_basis.inverse() * linear_velocity
 	local_vel.y = 0.0
 	speed = local_vel.length()
-	var reversing := local_vel.z < 0.0 and Input.get_axis("brake", "accelerate") < 0.0
-	if speed > 1.0 and not reversing:
+	# only while rolling forward: rolling backward (even with the throttle already pressed to go forward again)
+	# would read as a 180 deg slide and the drift code would spin the car on its own
+	if speed > 1.0 and local_vel.z > 1.0:
 		slip_angle = atan2(local_vel.x, local_vel.z)
 	else:
 		slip_angle = 0.0
@@ -363,6 +444,10 @@ func reset_car() -> void:
 	PhysicsServer3D.body_set_state(rid, PhysicsServer3D.BODY_STATE_LINEAR_VELOCITY, Vector3.ZERO)
 	PhysicsServer3D.body_set_state(rid, PhysicsServer3D.BODY_STATE_ANGULAR_VELOCITY, Vector3.ZERO)
 	global_transform = spawn_transform
+	reset_interpolation_all()
+	_hit_cooldown = 0.0
+	_kick_left = 0.0
+	_hold_still = true
 	snap_camera()
 	car_reset.emit()
 
@@ -387,9 +472,18 @@ func update_camera(delta: float) -> void:
 	camera_pivot.global_rotation = Vector3(_cam_pitch, _follow_yaw + _cam_yaw, 0.0)
 
 
+# After a teleport: the body, wheels and wheel meshes must all forget their previous position, otherwise
+# physics interpolation draws them sliding from where they were (a frozen car never catches up)
+func reset_interpolation_all() -> void:
+	reset_physics_interpolation()
+	for node in find_children("*", "Node3D", true, false):
+		(node as Node3D).reset_physics_interpolation()
+
+
 func snap_camera() -> void:
 	_follow_yaw = global_rotation.y
 	_cam_yaw = 0.0
 	_cam_pitch = 0.0
 	camera_pivot.global_position = global_position
 	camera_pivot.global_rotation = Vector3(0.0, _follow_yaw, 0.0)
+	camera_pivot.reset_physics_interpolation()

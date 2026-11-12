@@ -49,17 +49,19 @@ void fragment() {
 
 func _process(delta: float) -> void:
 	_time += delta
-	var up := car.global_basis.y
+	# positions as drawn this frame (physics interpolation), so the trail stays glued to the wheels
+	var body := (car as Node3D).get_global_transform_interpolated().basis
+	var up := body.y
 	for i in _wheels.size():
 		var trail: Array = _trails[i]
 		if car.get("is_boosting"):
 			var w := _wheels[i]
-			var p: Vector3 = w.get_contact_point() if w.is_in_contact() else w.global_position - up * w.wheel_radius
+			var p: Vector3 = w.get_global_transform_interpolated().origin - up * w.wheel_radius
 			p += up * 0.06
 			if not trail.is_empty() and trail[-1][0].distance_to(p) > 4.0:
 				trail.clear()   # teleport (reset): don't draw a line across the map
 			if trail.is_empty() or trail[-1][0].distance_to(p) > 0.12:
-				trail.append([p, car.global_basis.x, _time])
+				trail.append([p, body.x, _time])
 		while not trail.is_empty() and _time - trail[0][2] > trail_time:
 			trail.pop_front()
 	_rebuild()

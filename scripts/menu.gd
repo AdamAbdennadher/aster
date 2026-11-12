@@ -30,6 +30,8 @@ func _ready() -> void:
 	Game.state = Game.State.MENU
 	_park_car()
 	camera.make_current()
+	# moved every frame in _process, not by the physics: interpolating it would make it lag a tick behind
+	camera.physics_interpolation_mode = Node.PHYSICS_INTERPOLATION_MODE_OFF
 	_build_ui()
 	_intro()
 
@@ -53,6 +55,8 @@ func _park_car() -> void:
 	var heading := CAR_HEADING.normalized()
 	var pos := p + right * 2.0 + Vector3.UP * 0.62
 	_car.global_transform = Transform3D(Basis.looking_at(-heading, Vector3.UP), pos)
+	# parked and frozen: nothing to smooth, and interpolation would keep drawing its wheels at a stale spot
+	_car.physics_interpolation_mode = Node.PHYSICS_INTERPOLATION_MODE_OFF
 
 	# Rear three-quarter view, car on the left third of the screen
 	var car_right := heading.cross(Vector3.UP).normalized()
